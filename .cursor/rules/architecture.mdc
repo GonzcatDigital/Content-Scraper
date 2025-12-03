@@ -1,0 +1,129 @@
+---
+alwaysApply: true
+---
+
+# Blog Migrator - Architecture & Code Flow
+
+## File Structure
+```
+src/
+├── config.js      # Configuration API - all settings live here
+└── index.js       # Main application logic
+```
+
+## Processing Flow
+
+```
+1. init()
+   └── Loop through config.URLS
+       └── processUrl(url)
+           ├── getPageContent(url)              # Fetch HTML
+           ├── createPageDataObject()           # Extract frontmatter & content HTML
+           ├── extractFeaturedImage()           # Find featured image (separate selector)
+           ├── htmlToMarkdown()                 # Convert HTML → Markdown
+           ├── downloadAndRewriteImages()       # Find ALL images in MD, download, rewrite
+           ├── Download featured image          # Custom pattern
+           ├── generateMarkdown()               # Combine frontmatter + content
+           └── Write .md file
+```
+
+**Key insight**: Body images are found by parsing the MARKDOWN output, not by selector. This catches all images regardless of the original HTML markup.
+
+## Key Functions
+
+### `getPageContent(url)`
+Fetches HTML from URL using native `fetch()`.
+
+### `createPageDataObject(url, html)`
+Iterates through `config.DATA`, extracting values using selectors.
+- Returns: `{ frontmatter, content, nullFields }`
+- Tracks which fields returned null for reporting
+
+### `extractFeaturedImage(html)`
+Extracts featured image URL and alt text from specific selector.
+- Returns: `{ url, alt }` or `{ url: null, alt: null }`
+- Uses separate `altSelector` if configured
+- Falls back to first body image if not found
+
+### `htmlToMarkdown(html)`
+Converts HTML to Markdown using Turndown (no URL rewriting).
+
+**Custom Turndown rules**:
+- `linkedImages`: Handles `<a>` tags wrapping `<img>` - outputs plain `![alt](url)` instead of broken linked image syntax
+- `images`: Handles standalone `<img>` tags
+
+### `extractImagesFromMarkdown(markdown)`
+Finds all remote image URLs in markdown content.
+- Uses regex: `!\[.*?\]\((https?:\/\/[^)]+)\)`
+- Returns: `[{ url, alt }, ...]`
+- Deduplicates by URL
+- Applies optional filter function
+
+### `downloadAndRewriteImages(markdown, slug)`
+Downloads all remote images found in markdown and rewrites URLs.
+1. Extract all remote image URLs from markdown
+2. Download each to images directory with sequential naming
+3. Replace URLs in markdown with local paths
+- Returns: `{ markdown, downloadedCount, failedCount, totalFound }`
+
+### `generateFrontmatter(data)`
+Converts object to YAML frontmatter string.
+- Handles strings, arrays, null values
+- Escapes special characters
+
+## Image Handling
+
+### Body Images (Automatic)
+```
+HTML → Markdown → Find all ![](http...) → Download → Rewrite URLs
+```
+
+No selector needed - all images in the markdown output are processed.
+
+### Featured Image (Selector-based)
+```
+1. Try to extract from featuredImage.selector
+2. If found → Download with custom pattern
+3. If not found → Fallback to first body image
+4. Add to frontmatter with configured key names
+```
+
+## Error Handling
+
+- Failed downloads are logged but don't stop processing
+- Missing selectors log warnings and set null values
+- Failed URLs are tracked and reported in summary
+- Null fields are tracked per-page for reporting
+- Remote images that fail to download remain as remote URLs
+
+## Summary Report
+```
+==================================================
+📊 SUMMARY
+==================================================
+✓ Successful: 18
+✗ Failed: 0
+📷 Total images downloaded: 245
+⚠ Pages with missing fields: 2
+⚠ Pages with remote images: 1 (3 images total)
+--------------------------------------------------
+❌ Failed URLs:
+  - https://example.com/post: Error message
+--------------------------------------------------
+⚠ Pages with null/missing data fields:
+  - page-slug: description, image
+--------------------------------------------------
+⚠ Pages with images not downloaded (still remote URLs):
+  - coltsfoot-country-retreat-wedding: 1 images
+```
+
+The summary includes:
+- Quick overview counts at the top
+- Total images downloaded across all pages
+- Detailed breakdowns below (only shown if there are issues)
+
+## DOM Parsing
+Uses JSDOM to parse HTML and query with standard DOM APIs:
+- `document.querySelector()` for single elements
+
+Each query creates a fresh JSDOM instance to avoid state issues.

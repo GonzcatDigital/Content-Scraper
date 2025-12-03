@@ -1,0 +1,158 @@
+---
+alwaysApply: true
+---
+
+# Blog Migrator - Configuration API Reference
+
+The entire tool is controlled via `src/config.js`. This document explains all configuration options.
+
+## Top-Level Structure
+
+```js
+export default {
+    BASE_URL: "https://example.com",      // Base URL (informational)
+    URLS: [...],                           // Array of URLs to process
+    OUTPUT: {...},                         // Output directory settings
+    IMAGE_EXTRACTION: {...},               // Image download settings
+    DATA: {...},                           // Frontmatter field definitions
+}
+```
+
+## URLS
+Array of full URLs to scrape:
+```js
+URLS: [
+    "https://example.com/blog-post-1/",
+    "https://example.com/blog-post-2/",
+]
+```
+
+## OUTPUT
+Directory paths for generated files:
+```js
+OUTPUT: {
+    CONTENT_DIR: "./downloads/content",   // Where .md files are saved
+    IMAGES_DIR: "./downloads/images",     // Where images are downloaded
+}
+```
+
+## IMAGE_EXTRACTION
+
+### Body Image Settings
+Body images are automatically extracted from the markdown output - no selector needed!
+
+```js
+IMAGE_EXTRACTION: {
+    relativePath: "/assets/uploads/",     // Path prefix for rewritten URLs
+    filenamePattern: "{slug}-{index}",    // Filename pattern ({slug}, {index} replaced)
+    filter: (url) => true,                // Optional: filter function (return false to skip)
+    
+    featuredImage: {...}                  // Featured image config (see below)
+}
+```
+
+### Featured Image Settings
+Set to `null` to disable featured image extraction.
+```js
+featuredImage: {
+    selector: ".background-inner",        // CSS selector for featured image element
+    getValue: (el) => el.style.backgroundImage.replace(/url\(['"]?/, '').replace(/['"]?\)/, ''),
+    altSelector: ".heading-text h1",      // Optional: different element for alt text
+    getAlt: (el) => el?.textContent?.trim() || '',
+    filenamePattern: "{slug}-featured",   // Filename pattern
+    frontmatterKey: "image",              // Frontmatter field name for URL
+    altFrontmatterKey: "imageAlt"         // Frontmatter field name for alt
+}
+```
+
+**Fallback behavior**: If featured image selector fails, uses first body image.
+
+## DATA
+Defines frontmatter fields. Keys become lowercase field names (underscores removed).
+
+### Static Values
+```js
+DATA: {
+    AUTHOR: "John Smith",                 // Static string value
+    CATEGORY: "Blog",
+}
+```
+
+### Dynamic Values (Selector-based)
+```js
+DATA: {
+    TITLE: {
+        selector: "h1",                   // CSS selector
+        getValue: (el) => el.textContent.trim(),  // Extract value from element
+    },
+    DATE: {
+        selector: "meta[property='article:published_time']",
+        getValue: (el) => el.getAttribute("content"),
+    },
+}
+```
+
+### Special Flags
+
+#### `isContent: true`
+Field becomes markdown body instead of frontmatter:
+```js
+BODY: {
+    selector: ".post-body",
+    getValue: (el) => el.innerHTML,
+    isContent: true,                      // Not in frontmatter, becomes MD content
+}
+```
+
+## Filename Patterns
+
+### Body Images
+Pattern: `filenamePattern: "{slug}-{index}"`
+- `{slug}` - URL slug (e.g., "brook-farm-wedding")
+- `{index}` - Zero-padded index (01, 02, 03...)
+
+Result: `brook-farm-wedding-01.jpg`, `brook-farm-wedding-02.jpg`
+
+### Featured Image
+Pattern: `filenamePattern: "{slug}-featured"`
+- `{slug}` - URL slug
+
+Result: `brook-farm-wedding-featured.jpg`
+
+## Image Filter Function
+
+Optional filter to skip certain image URLs:
+```js
+filter: (url) => {
+    // Skip external CDN images
+    if (url.includes('getnarrativeapp.com')) return false;
+    // Skip placeholder images
+    if (url.includes('placeholder')) return false;
+    return true;
+}
+```
+
+## Common Selector Patterns
+
+### WordPress/Uncode Theme
+```js
+// Featured image from CSS background
+selector: ".background-inner"
+getValue: (el) => el.style.backgroundImage.replace(/url\(['"]?/, '').replace(/['"]?\)/, '')
+
+// Title
+selector: ".heading-text h1"
+
+// Post body
+selector: ".post-body"
+```
+
+### Standard WordPress
+```js
+// Featured image
+selector: ".wp-post-image"
+getValue: (el) => el.src
+
+// Content
+selector: ".entry-content"
+```

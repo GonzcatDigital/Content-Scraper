@@ -1,0 +1,48 @@
+---
+alwaysApply: true
+---
+
+# Blog Migrator - Project Overview
+
+## Purpose
+A Node.js CLI tool for migrating blog content from WordPress/CMS websites to static markdown files with downloaded images. Designed for Test Valley Digital's workflow to extract content and assets from client websites for migration to new platforms.
+
+## Use Case
+The tool scrapes specified URLs, extracts:
+- **Frontmatter data** (title, description, date, author, category, etc.)
+- **Featured images** with alt text
+- **Body content** converted to Markdown
+- **All images** downloaded and renamed sequentially
+
+Output is markdown files with YAML frontmatter and images organized for drag-and-drop into new projects.
+
+## Key Design Principles
+1. **Everything configurable via `config.js`** - The config file acts as an API to control the tool
+2. **Selector-based extraction** - All data is extracted using CSS selectors with custom getValue functions
+3. **Fallback behavior** - Featured image falls back to first body image if not found
+4. **Null tracking** - Missing fields are reported in summary and saved as `null` in frontmatter
+
+## Output Structure
+```
+downloads/
+├── content/
+│   ├── brook-farm-wedding.md
+│   └── oakley-hall-hotel-wedding.md
+└── images/
+    ├── brook-farm-wedding-01.jpg
+    ├── brook-farm-wedding-02.jpg
+    ├── brook-farm-wedding-featured.jpg
+    └── ...
+```
+
+## Dependencies
+- `jsdom` - HTML parsing and DOM querying
+- `turndown` - HTML to Markdown conversion
+
+## Running the Tool
+```bash
+npm start
+```
+
+## Current Client Context
+Originally built for **Philip Quinnell Photography** (philipquinnellphotography.com) - a wedding photography website using the Uncode WordPress theme with specific markup patterns.

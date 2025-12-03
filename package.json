@@ -1,0 +1,17 @@
+{
+  "name": "blog-migrator",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "jsdom": "^24.1.0",
+    "turndown": "^7.2.2"
+  }
+}

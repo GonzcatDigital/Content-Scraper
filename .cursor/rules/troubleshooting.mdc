@@ -1,0 +1,141 @@
+---
+alwaysApply: true
+---
+
+# Blog Migrator - Troubleshooting & Common Issues
+
+## Common Errors
+
+### "Failed to parse URL from..."
+**Cause**: URL has extra characters (quotes, whitespace).
+
+**Common scenario**: Extracting featured image from CSS `background-image`.
+
+**Fix**: Use regex to strip all URL wrapper characters:
+```js
+getValue: (el) => el.style.backgroundImage.replace(/url\(['"]?/, '').replace(/['"]?\)/, '')
+```
+
+### "filter is not a function"
+**Cause**: `filter` property in config is not a function.
+
+**Fix**: Ensure filter is a function:
+```js
+filter: (url) => true,                    // ✓ Correct
+filter: true,                             // ✗ Wrong
+```
+
+### "Cannot read properties of null (reading 'dataset')"
+**Cause**: Selector returned null, but `getValue` tried to access properties.
+
+**Fix**: Check element exists before accessing, or use optional chaining:
+```js
+getValue: (el) => el?.dataset?.src || el?.src || ''
+```
+
+### "window is not defined"
+**Cause**: Trying to use browser globals in Node.js (usually in config functions).
+
+**Fix**: Only use element properties passed to getValue, not global objects:
+```js
+getValue: (el) => window.getComputedStyle(el)  // ✗ Wrong
+getValue: (el) => el.style.backgroundImage     // ✓ Correct
+```
+
+### Featured image not downloading
+**Cause**: Featured image selector returns URL in unexpected format.
+
+**Debug**: Log the extracted URL:
+```js
+getValue: (el) => {
+    const url = el.style.backgroundImage;
+    console.log('Raw URL:', url);
+    return url.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
+}
+```
+
+### Broken image syntax in markdown output (linked images)
+**Cause**: Images wrapped in `<a>` tags were converted by Turndown to linked image syntax with broken newlines.
+
+**Solution**: Fixed in v8 with custom `linkedImages` Turndown rule. This is handled automatically - no config needed.
+
+### Some images still have remote URLs
+**Cause**: Download failed for those specific images (network error, 404, etc).
+
+**Symptom**: Summary shows "Pages with remote images" and markdown files contain `![](https://...)` URLs.
+
+**Solution**: Check the console warnings for specific failures. Common causes:
+- Image URL returned 404
+- Network timeout
+- URL blocked by server
+
+You can use the `filter` function to skip problematic URLs:
+```js
+filter: (url) => {
+    // Skip external CDN that blocks requests
+    if (url.includes('getnarrativeapp.com')) return false;
+    return true;
+}
+```
+
+## Debugging Tips
+
+### Check what's being extracted
+Add console.log in config functions:
+```js
+getValue: (el) => {
+    const value = el.textContent;
+    console.log('Extracted:', value);
+    return value.trim();
+}
+```
+
+### Test selectors in browser
+```js
+// In browser console on target page:
+document.querySelector('.background-inner')?.style.backgroundImage
+document.querySelector('.heading-text h1')?.textContent
+```
+
+## Site-Specific Issues
+
+### Uncode WordPress Theme (Philip Quinnell Photography)
+- Featured image: Background image on `.background-inner`
+- Post body: `.post-body`
+- Title: `.heading-text h1`
+
+### Third-party embeds (Narrative, etc)
+Some posts embed content from third-party services like Narrative. These images may fail to download if the CDN blocks automated requests.
+
+**Solution**: Use the filter function to skip these:
+```js
+filter: (url) => !url.includes('getnarrativeapp.com')
+```
+
+## Performance Notes
+
+- Tool processes URLs sequentially (not parallel)
+- Large images may take time to download
+- Consider adding delay between requests if hitting rate limits
+
+## Validation
+
+### Check output markdown
+```yaml
+---
+title: Example Title
+image: /assets/uploads/slug-featured.jpg
+imageAlt: Alt text here
+---
+
+Content with images:
+![alt text](/assets/uploads/slug-01.jpg)
+```
+
+### Verify images downloaded
+```bash
+ls downloads/images/
+```
+
+### Check for null fields in summary
+The summary report shows which pages have missing data - update selectors or accept nulls.

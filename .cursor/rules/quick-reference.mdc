@@ -1,0 +1,116 @@
+# Blog Migrator - Quick Reference
+
+## Run the tool
+```bash
+npm start
+```
+
+## Config location
+`src/config.js`
+
+## Add new URLs
+Add to `config.URLS` array:
+```js
+URLS: [
+    "https://example.com/new-post/",
+    // ...existing URLs
+]
+```
+
+## Add new frontmatter field
+
+### Static value
+```js
+DATA: {
+    NEW_FIELD: "static value",
+}
+```
+
+### Dynamic value from page
+```js
+DATA: {
+    NEW_FIELD: {
+        selector: "CSS selector",
+        getValue: (el) => el.textContent.trim(),
+    },
+}
+```
+
+## Change image selectors
+```js
+IMAGE_EXTRACTION: {
+    selector: "new-selector",
+    getValue: (el) => el.src,  // or el.href, el.dataset.src, etc.
+}
+```
+
+## Disable featured image
+```js
+IMAGE_EXTRACTION: {
+    featuredImage: null,  // Set to null to disable
+}
+```
+
+## Change output directories
+```js
+OUTPUT: {
+    CONTENT_DIR: "./new/content/path",
+    IMAGES_DIR: "./new/images/path",
+}
+```
+
+## Change filename patterns
+```js
+// Body images: {slug} and {index} available
+filenamePattern: "{slug}-image-{index}"   // → slug-image-01.jpg
+
+// Featured image: {slug} available
+filenamePattern: "{slug}-hero"            // → slug-hero.jpg
+```
+
+## Common getValue patterns
+```js
+// Text content
+getValue: (el) => el.textContent.trim()
+
+// Attribute
+getValue: (el) => el.getAttribute("content")
+
+// href/src
+getValue: (el) => el.href
+getValue: (el) => el.src
+
+// Data attribute
+getValue: (el) => el.dataset.src || el.src
+
+// Background image (with quote stripping)
+getValue: (el) => el.style.backgroundImage.replace(/url\(['"]?/, '').replace(/['"]?\)/, '')
+
+// With fallback
+getValue: (el) => el.alt || el.title || ''
+```
+
+## Output format
+
+### Frontmatter
+```yaml
+---
+title: Page Title
+description: Meta description
+author: Author Name
+date: 2024-01-15T00:00:00+00:00
+category: Category
+featuredImage: /assets/uploads/slug-featured.jpg
+featuredImageAlt: Alt text
+---
+```
+
+### Content
+Markdown with rewritten image paths:
+```markdown
+![Alt text](/assets/uploads/slug-01.jpg)
+
+Paragraph content here...
+
+![Another image](/assets/uploads/slug-02.jpg)
+```

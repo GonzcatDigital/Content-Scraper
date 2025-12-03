@@ -1,0 +1,116 @@
+---
+alwaysApply: true
+---
+
+# Blog Migrator - Development History & Design Decisions
+
+## Project Genesis
+Built for Test Valley Digital to migrate blog content from WordPress sites to static markdown files for new platforms.
+
+## Initial Requirements
+1. Iterate over URLs and create markdown files
+2. Extract frontmatter from page elements
+3. Download all images with sequential naming
+4. Convert HTML body to Markdown
+5. Make everything configurable via config.js
+
+## Key Design Decisions
+
+### Config as API
+**Decision**: All site-specific logic lives in config.js, not index.js.
+
+**Rationale**: Different websites have different markup. By making selectors and extraction functions configurable, the same tool works for any site without code changes.
+
+### Flat Image Directory
+**Decision**: All images go to single directory, not per-post folders.
+
+**Previous**: `downloads/images/post-slug/image.jpg`
+**Current**: `downloads/images/post-slug-01.jpg`
+
+**Rationale**: Simpler for drag-and-drop workflow. Filename pattern includes slug to avoid conflicts.
+
+### Sequential Image Naming
+**Decision**: Images named `{slug}-01.jpg`, `{slug}-02.jpg` etc.
+
+**Rationale**: 
+- Original filenames often ugly/inconsistent
+- Order of appearance preserved
+- Easy to identify which post an image belongs to
+
+### Featured Image Fallback
+**Decision**: If featured image selector fails, use first body image.
+
+**Rationale**: Better to have a featured image than null. First body image is usually relevant.
+
+### Null Fields in Frontmatter
+**Decision**: Missing fields saved as `null`, not omitted.
+
+**Previous**: Omitted missing fields
+**Current**: `fieldname: null`
+
+**Rationale**: Makes it obvious what needs manual attention. Easy to search for `null` in output files.
+
+### Alt Text Configuration
+**Decision**: Both body images and featured image have configurable alt text extraction.
+
+**Implementation**:
+- Body: `getAlt(el)` function per image element
+- Featured: Separate `altSelector` + `getAlt` (can use different element)
+
+**Rationale**: Alt text often lives on different elements than image URL (e.g., title attribute, nearby heading).
+
+### IMAGE_EXTRACTION vs DATA
+**Decision**: Image-related config under `IMAGE_EXTRACTION`, other frontmatter under `DATA`.
+
+**Previous**: Featured image was in `DATA` with `isImage: true` flag
+**Current**: Featured image under `IMAGE_EXTRACTION.featuredImage`
+
+**Rationale**: All image logic grouped together. `DATA` is purely for frontmatter text fields.
+
+### Linked Images → Plain Images
+**Decision**: `<a>` tags wrapping `<img>` tags output as plain images, not linked images.
+
+**Previous**: Turndown converted `<a><img></a>` to broken `[![alt](url)](url)` with newlines
+**Current**: Custom Turndown rule outputs just `![alt](url)`
+
+**Rationale**: Original links pointed to full-size lightbox images. Since we download the full-size image anyway, the link wrapper is unnecessary and was causing broken markdown syntax.
+
+### Markdown-First Image Extraction (v10)
+**Decision**: Extract and download images from the MARKDOWN output, not from HTML using selectors.
+
+**Previous**: Selector-based extraction (`.pushed[data-lbox]`) → missed images with different markup
+**Current**: Convert HTML → Markdown first, then find all `![](http...)` patterns
+
+**Rationale**:
+- Different posts use different HTML markup (lightbox links vs plain img tags)
+- Selector-based approach missed older posts with different markup
+- Markdown-first approach catches ALL images that end up in the output
+- Simpler config - no body image selector needed
+
+## Evolution Summary
+
+1. **v1**: Basic scraping, frontmatter from config.DATA
+2. **v2**: Added image downloading with sequential naming
+3. **v3**: Added Turndown for HTML→Markdown conversion
+4. **v4**: Added featured image support with fallback
+5. **v5**: Added null field tracking and reporting
+6. **v6**: Added configurable alt text for images
+7. **v7**: Reorganized config (IMAGE_EXTRACTION contains featured image)
+8. **v8**: Fixed linked image syntax (custom Turndown rule for `<a>` wrapping `<img>`)
+9. **v9**: Added remote image tracking - warns when images in content weren't downloaded
+10. **v10**: Major refactor - images now extracted from markdown output, not HTML selectors
+
+## Known Limitations
+
+- Sequential processing (not parallel)
+- No retry logic for failed downloads
+- JavaScript-rendered content not captured (static HTML only)
+- Some older posts on target site have different markup (shows 0 images)
+
+## Future Considerations
+
+- Parallel URL processing for speed
+- Retry failed downloads
+- Progress bar for large batches
+- Dry-run mode to preview without downloading
+- HTML cleanup rules before Markdown conversion
