@@ -1,11 +1,11 @@
 export default {
     // Base URL of the website you're scraping (informational only)
-    BASE_URL: "https://example.com",
+    BASE_URL: "https://phxinjurylaw.com",
 
     // List of URLs to scrape
     URLS: [
-        "https://example.com/blog-post-1/",
-        "https://example.com/blog-post-2/",
+        "https://phxinjurylaw.com/faq/a-drunk-driver-hit-me-in-an-auto-accident-how-does-that-affect-my-case/",
+        "https://phxinjurylaw.com/faq/ambulance-took-me-from-the-crash-scene-who-pays-the-bill/",
     ],
 
     // Output directories (relative to project root)
@@ -17,7 +17,7 @@ export default {
     // Image settings
     IMAGE_EXTRACTION: {
         // Path prefix for rewritten image URLs in markdown
-        relativePath: "/assets/uploads/",
+        relativePath: "/assets/images/blog/",
         // Filename pattern: {slug} and {index} are replaced
         filenamePattern: "{slug}-{index}",
         // Optional: filter function to skip certain URLs (return false to skip)
@@ -27,14 +27,14 @@ export default {
         // Extracted separately, falls back to first body image if not found
         featuredImage: {
             // CSS selector to find the featured image element
-            selector: ".featured-image img",
+            selector: ".pageRow",
             // Function to extract the image URL from the element
-            getValue: (el) => el.src,
+            getValue: (el) => el.style.backgroundImage.replace(/url\(['"]?/, '').replace(/['"]?\)/, ''),
             // Optional: use a different element for alt text
-            altSelector: null,
-            getAlt: (el) => el?.alt || '',
+            altSelector: ".vcex-page-title__text",
+            getAlt: (el) => el?.textContent?.trim() || '',
             // Filename pattern: {slug} is replaced
-            filenamePattern: "{slug}-featured",
+            filenamePattern: "{slug}",
             // Frontmatter field names for the image
             frontmatterKey: "image",
             altFrontmatterKey: "imageAlt",
@@ -48,11 +48,11 @@ export default {
     // - isContent: true → used as markdown body instead of frontmatter
     DATA: {
         // Example: Static value (same for all posts)
-        AUTHOR: "Author Name",
+        AUTHOR: "Phoenix Accident and Injury Law Firm",
 
         // Example: Extract from an element
         TITLE: {
-            selector: "h1",
+            selector: "title",
             getValue: (el) => el.textContent.trim(),
         },
 
@@ -73,7 +73,7 @@ export default {
 
         // The main content - must have isContent: true
         BODY: {
-            selector: ".post-content",
+            selector: ".mainContentWrapper",
             getValue: (el) => el.innerHTML,
             isContent: true,
         },
