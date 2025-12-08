@@ -4,8 +4,8 @@ export default {
 
     // List of URLs to scrape
     URLS: [
-        "https://phxinjurylaw.com/faq/a-drunk-driver-hit-me-in-an-auto-accident-how-does-that-affect-my-case/",
-        "https://phxinjurylaw.com/faq/ambulance-took-me-from-the-crash-scene-who-pays-the-bill/",
+        "https://phxinjurylaw.com/blog/motorcycle-accidents-during-arizonas-tourism-season-what-riders-need-to-know/",
+        "https://phxinjurylaw.com/blog/how-major-insurance-companies-exploit-accident-victims-in-arizona/",
     ],
 
     // Output directories (relative to project root)
@@ -70,6 +70,21 @@ export default {
 
         // Example: Static category
         CATEGORY: "Blog",
+
+        // Extract slug/path from URL (remove /blog/ prefix and leading slash)
+        URL: {
+            fromUrl: true,
+            getValue: (url) => {
+                const urlObj = new URL(url);
+                const pathname = urlObj.pathname;
+                // Remove /blog/ and get everything after it
+                const blogIndex = pathname.indexOf('/blog/');
+                if (blogIndex !== -1) {
+                    return pathname.substring(blogIndex + '/blog/'.length).replace(/\/$/, ''); // Remove /blog/ prefix and trailing slash
+                }
+                return pathname.replace(/^\/|\/$/g, ''); // Fallback: return full path without slashes if /blog/ not found
+            },
+        },
 
         // The main content - must have isContent: true
         BODY: {

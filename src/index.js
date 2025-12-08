@@ -111,6 +111,22 @@ function createPageDataObject(url, html) {
             continue;
         }
 
+        // Extract from URL (special case)
+        if (item.fromUrl && item.getValue) {
+            const value = item.getValue(url);
+
+            if (item.isContent) {
+                content = value;
+            } else {
+                frontmatter[fieldName] = value ?? null;
+
+                if (value === null || value === undefined || value === '') {
+                    nullFields.push(fieldName);
+                }
+            }
+            continue;
+        }
+
         // Dynamic value from selector
         if (item.selector && item.getValue) {
             const element = getElementFromHTML(html, item.selector);
