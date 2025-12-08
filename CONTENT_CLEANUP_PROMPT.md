@@ -13,11 +13,11 @@ The files need cleanup to remove scraping artifacts and standardise formatting.
 
 Before processing, review these details about the migrated content:
 
-**Source site:** [SITE_NAME / URL]
+**Source site:** https://phxinjurylaw.com
 
-**Content type:** [e.g., Wedding photography blog posts, Product pages, Articles]
+**Content type:** blog posts
 
-**Author:** [Default author name if static]
+**Author:** Phoenix Accident and Injury Law Firm
 
 **Frontmatter schema:**
 ```yaml
@@ -27,6 +27,7 @@ Before processing, review these details about the migrated content:
 title: "string"
 description: "string or null"
 author: "string"
+url: "string"
 date: "ISO date string"
 category: "string"
 permalink: "string"
@@ -36,7 +37,7 @@ imageAlt: "string"
 ---
 ```
 
-**Image path pattern:** [e.g., `/assets/uploads/`]
+**Image path pattern:** [e.g., `/assets/images/blog/`]
 
 **Known scraping artifacts to remove:**
 - [List specific patterns from the source site's theme]
