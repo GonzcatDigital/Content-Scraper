@@ -358,7 +358,22 @@ async function processUrl(url) {
     await ensureDir(config.OUTPUT.IMAGES_DIR);
 
     // Step 1: Convert HTML to Markdown (no URL rewriting yet)
-    const rawMarkdown = htmlToMarkdown(content);
+    let rawMarkdown = htmlToMarkdown(content);
+
+    // Step 1.5: Prepend markdown if configured (e.g., heading from title)
+    const bodyConfig = config.DATA.BODY;
+    if (bodyConfig?.prependMarkdown) {
+        const prependEl = getElementFromHTML(html, bodyConfig.prependMarkdown.selector);
+        if (prependEl) {
+            const prependText = prependEl.textContent?.trim() || '';
+            if (prependText) {
+                const formatted = bodyConfig.prependMarkdown.format
+                    ? bodyConfig.prependMarkdown.format(prependText)
+                    : `${prependText}\n\n`;
+                rawMarkdown = formatted + rawMarkdown;
+            }
+        }
+    }
 
     // Step 2: Find all remote images in markdown, download them, rewrite URLs
     const { markdown: processedMarkdown, downloadedCount, totalFound } =

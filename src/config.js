@@ -76,6 +76,11 @@ export default {
             selector: ".mainContentWrapper",
             getValue: (el) => el.innerHTML,
             isContent: true,
+            // Optional: prepend markdown heading from this selector
+            prependMarkdown: {
+                selector: ".vcex-page-title__text",
+                format: (text) => `# ${text}\n\n`,
+            },
         },
     }
 }
