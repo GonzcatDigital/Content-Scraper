@@ -5,7 +5,7 @@ description: Find answers to the top 30 DUI FAQS on DUI cases on our blog, prese
 date: 2021-12-15
 category: Blog
 url: top-30-dui-faqs-on-dui-cases
-image: null
+image: /assets/images/blog/landing.jpg
 imageAlt: null
 ---
 

@@ -5,7 +5,7 @@ description: Looking for experienced attorneys specializing in broken bones in a
 date: 2021-04-14
 category: Blog
 url: broken-bones-in-a-car-accident
-image: "data:image/svg+xml;nitro-empty-id=MzIxOjI0NQ==-1;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMzAwIDIyNSIgd2lkdGg9IjMwMCIgaGVpZ2h0PSIyMjUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PC9zdmc+"
+image: /assets/images/blog/broken-bones-in-a-car-accident.jpg
 imageAlt: Broken Bones in a Car Accident
 ---
 

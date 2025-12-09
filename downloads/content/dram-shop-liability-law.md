@@ -5,7 +5,7 @@ description: Read more about dram shop liability law and the responsibilities th
 date: 2021-04-13
 category: Blog
 url: dram-shop-liability-law
-image: null
+image: /assets/images/blog/landing.jpg
 imageAlt: null
 ---
 

@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
-    "cleanup": "node src/cleanup.js"
+    "fix-images": "node src/fix-images.js"
   },
   "keywords": [],
   "author": "",

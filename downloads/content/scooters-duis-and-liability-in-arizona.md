@@ -5,7 +5,7 @@ description: The intersection of electric scooters, DUI laws, and liability crea
 date: 2025-07-07
 category: Blog
 url: scooters-duis-and-liability-in-arizona
-image: /assets/images/blog/scooters-duis-and-liability-in-arizona.png
+image: /assets/images/blog/scooters-duis-and-liability-in-arizona.jpg
 imageAlt: "Scooter DUIs and Liability in Arizona: What Happens After a Crash?"
 ---
 

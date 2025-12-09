@@ -5,7 +5,7 @@ description: Electric scooter accidents are surging nationwide, with Phoenix exp
 date: 2025-07-17
 category: Blog
 url: scooter-accidents-are-skyrocketing-phoenix
-image: /assets/images/blog/scooter-accidents-are-skyrocketing-phoenix.png
+image: /assets/images/blog/scooter-accidents-are-skyrocketing-phoenix.jpg
 imageAlt: "Scooter Accidents Are Skyrocketing in Phoenix: What Every Rider Needs to Know"
 ---
 

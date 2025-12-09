@@ -5,7 +5,7 @@ description: Phoenix Accident and Injury Law Firm attorneys are here to help
 date: 2025-07-03
 category: Blog
 url: who-can-file-a-wrongful-death-claim
-image: /assets/images/blog/who-can-file-a-wrongful-death-claim.png
+image: /assets/images/blog/who-can-file-a-wrongful-death-claim.jpg
 imageAlt: Who Can File a Wrongful Death Claim in Arizona?
 ---
 

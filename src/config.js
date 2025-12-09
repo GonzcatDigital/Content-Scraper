@@ -3,7 +3,12 @@ export default {
     BASE_URL: "https://phxinjurylaw.com",
 
     // List of URLs to scrape
-    URLS: [
+    // NOTE: Empty - use `npm run fix-images` to fix broken images only
+    URLS: [],
+    
+    // Original URLs (commented out):
+    /*
+    URLS_BACKUP: [
         "https://phxinjurylaw.com/blog/motorcycle-accidents-during-arizonas-tourism-season-what-riders-need-to-know/",
         "https://phxinjurylaw.com/blog/how-major-insurance-companies-exploit-accident-victims-in-arizona/",
         "https://phxinjurylaw.com/blog/navigating-family-disputes-in-wrongful-death-cases/",
@@ -256,6 +261,7 @@ export default {
         "https://phxinjurylaw.com/blog/rear-end-accidents-at-high-speed/",
         "https://phxinjurylaw.com/blog/file-a-nursing-home-abuse-complaint/",
     ],
+    */
 
     // Output directories (relative to project root)
     OUTPUT: {

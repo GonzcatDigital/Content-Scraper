@@ -5,7 +5,7 @@ description: Prractical information and actionable steps to help you find the pa
 date: 2019-07-15
 category: Blog
 url: file-a-nursing-home-abuse-complaint
-image: null
+image: /assets/images/blog/landing.jpg
 imageAlt: null
 ---
 

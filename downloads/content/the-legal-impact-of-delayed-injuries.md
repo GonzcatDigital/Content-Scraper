@@ -5,7 +5,7 @@ description: Feeling fine after an accident doesn't mean you're actually fine, a
 date: 2025-07-01
 category: Blog
 url: the-legal-impact-of-delayed-injuries
-image: /assets/images/blog/the-legal-impact-of-delayed-injuries.png
+image: /assets/images/blog/the-legal-impact-of-delayed-injuries.jpg
 imageAlt: "Why You Need to See a Doctor – Even If You Feel ‘Fine’: The Legal Reality of Delayed Injuries"
 ---
 

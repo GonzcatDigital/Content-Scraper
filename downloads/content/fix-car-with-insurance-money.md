@@ -5,7 +5,7 @@ description: "If you've been in an accident, you might wonder, \"Can I fix my ow
 date: 2020-09-23
 category: Blog
 url: fix-car-with-insurance-money
-image: /assets/images/blog/fix-car-with-insurance-money.jpeg
+image: /assets/images/blog/fix-car-with-insurance-money.jpg
 imageAlt: Can I Fix My Own Car with Insurance Money?
 ---
 

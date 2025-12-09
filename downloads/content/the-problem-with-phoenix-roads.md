@@ -5,7 +5,7 @@ description: Phoenix consistently ranks among the most dangerous cities in Ameri
 date: 2025-06-22
 category: Blog
 url: the-problem-with-phoenix-roads
-image: /assets/images/blog/the-problem-with-phoenix-roads.png
+image: /assets/images/blog/the-problem-with-phoenix-roads.jpg
 imageAlt: "The Problem With Phoenix Roads: Why Cyclists and Pedestrians Are at Higher Risk"
 ---
 

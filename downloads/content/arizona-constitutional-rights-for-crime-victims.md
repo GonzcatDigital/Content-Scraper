@@ -5,7 +5,7 @@ description: Arizona Constitutional Rights for Crime Victims. Contact Phoenix In
 date: 2021-11-11
 category: Blog
 url: arizona-constitutional-rights-for-crime-victims
-image: null
+image: /assets/images/blog/landing.jpg
 imageAlt: null
 ---
 

@@ -5,7 +5,7 @@ description: Although punitive damages DUI are rare, a jury will more likely awa
 date: 2019-08-16
 category: Blog
 url: punitive-damages-dui
-image: null
+image: /assets/images/blog/landing.jpg
 imageAlt: null
 ---
 

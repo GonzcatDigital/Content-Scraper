@@ -5,7 +5,7 @@ description: Understanding what a victim impact hearing involves can help you fe
 date: 2025-07-23
 category: Blog
 url: what-happens-at-a-victim-impact-hearing-in-arizona
-image: /assets/images/blog/what-happens-at-a-victim-impact-hearing-in-arizona.png
+image: /assets/images/blog/what-happens-at-a-victim-impact-hearing-in-arizona.jpg
 imageAlt: What Happens at a Victim Impact Hearing in Arizona?
 ---
 

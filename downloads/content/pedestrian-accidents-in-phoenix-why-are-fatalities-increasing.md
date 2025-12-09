@@ -5,7 +5,7 @@ description: Phoenix Accident and Injury Law Firm attorneys are here to help
 date: 2025-07-15
 category: Blog
 url: pedestrian-accidents-in-phoenix-why-are-fatalities-increasing
-image: null
+image: /assets/images/blog/landing.jpg
 imageAlt: null
 ---
 

@@ -5,7 +5,7 @@ description: Let's pull back the curtain and examine what insurance adjusters ar
 date: 2025-06-19
 category: Blog
 url: what-insurance-adjusters-can-legally-do
-image: /assets/images/blog/what-insurance-adjusters-can-legally-do.png
+image: /assets/images/blog/what-insurance-adjusters-can-legally-do.jpg
 imageAlt: "The Insurance Company Isn’t Your Friend: What Adjusters Legally Can – and Can’t – Do"
 ---
 
