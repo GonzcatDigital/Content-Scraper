@@ -1,11 +1,10 @@
 export default {
     // Base URL of the website you're scraping (informational only)
-    BASE_URL: "https://example.com",
+    BASE_URL: "https://phxinjurylaw.com",
 
     // List of URLs to scrape
     URLS: [
-        "https://example.com/blog-post-1/",
-        "https://example.com/blog-post-2/",
+        "https://phxinjurylaw.com/practice-areas/car-accident-attorneys/",
     ],
 
     // Output directories (relative to project root)
@@ -17,28 +16,14 @@ export default {
     // Image settings
     IMAGE_EXTRACTION: {
         // Path prefix for rewritten image URLs in markdown
-        relativePath: "/assets/uploads/",
+        relativePath: "/assets/images/practice-areas/",
         // Filename pattern: {slug} and {index} are replaced
         filenamePattern: "{slug}-{index}",
         // Optional: filter function to skip certain URLs (return false to skip)
         filter: (url) => true,
 
-        // Featured image - set to null to disable
-        // Extracted separately, falls back to first body image if not found
-        featuredImage: {
-            // CSS selector to find the featured image element
-            selector: ".featured-image img",
-            // Function to extract the image URL from the element
-            getValue: (el) => el.src,
-            // Optional: use a different element for alt text
-            altSelector: null,
-            getAlt: (el) => el?.alt || '',
-            // Filename pattern: {slug} is replaced
-            filenamePattern: "{slug}-featured",
-            // Frontmatter field names for the image
-            frontmatterKey: "image",
-            altFrontmatterKey: "imageAlt",
-        },
+        // Featured image - disabled for interior pages
+        featuredImage: null,
     },
 
     // Frontmatter & content data
@@ -47,35 +32,30 @@ export default {
     // - Objects with selector/getValue extract data from the page
     // - isContent: true → used as markdown body instead of frontmatter
     DATA: {
-        // Example: Static value (same for all posts)
-        AUTHOR: "Author Name",
-
-        // Example: Extract from an element
         TITLE: {
-            selector: "h1",
+            selector: "title",
             getValue: (el) => el.textContent.trim(),
         },
 
-        // Example: Extract from a meta tag
         DESCRIPTION: {
             selector: "meta[name='description']",
             getValue: (el) => el.getAttribute("content"),
         },
 
-        // Example: Extract and format a date
-        DATE: {
-            selector: "meta[property='article:published_time']",
-            getValue: (el) => el.getAttribute("content"),
+        PERMALINK: {
+            fromUrl: true,
+            getValue: (url) => {
+                const urlObj = new URL(url);
+                return urlObj.pathname.replace(/^\//, ''); // Remove leading slash
+            },
         },
-
-        // Example: Static category
-        CATEGORY: "Blog",
 
         // The main content - must have isContent: true
         BODY: {
-            selector: ".post-content",
+            selector: ".vcex-post-content-c",
             getValue: (el) => el.innerHTML,
             isContent: true,
+            isHtml: true,  // Keep as HTML, don't convert to Markdown
         },
     }
 }
