@@ -62,6 +62,42 @@ async function getUniqueFilename(dirPath, baseFilename) {
 }
 
 /**
+ * Rename file and update permalink in frontmatter
+ * Returns { newPath, updatedFrontmatter }
+ */
+async function renameFileAndUpdatePermalink(outputPath, oldSlug, newFilename, newPermalink, frontmatter) {
+    try {
+        // Read the current file content
+        const fileContent = await fs.readFile(outputPath, 'utf-8');
+        
+        // Update frontmatter with new permalink
+        const updatedFrontmatter = { ...frontmatter };
+        updatedFrontmatter.permalink = newPermalink;
+        
+        // Regenerate the markdown with updated frontmatter
+        // Extract the body content (everything after the frontmatter)
+        const frontmatterEnd = fileContent.indexOf('---', 3); // Find second ---
+        const bodyContent = fileContent.substring(frontmatterEnd + 3).trim();
+        const updatedContent = generateMarkdown(updatedFrontmatter, bodyContent);
+        
+        // Generate new filename and path
+        const newFilenameWithExt = `${newFilename}.html`;
+        const newPath = path.join(path.dirname(outputPath), newFilenameWithExt);
+        
+        // Write updated content to new file
+        await fs.writeFile(newPath, updatedContent, 'utf-8');
+        
+        // Delete old file
+        await fs.unlink(outputPath);
+        
+        return { newPath, updatedFrontmatter };
+    } catch (error) {
+        console.warn(`   ⚠ Failed to rename file: ${error.message}`);
+        throw error;
+    }
+}
+
+/**
  * Open URL in Safari browser
  */
 async function openInBrowser(url) {
@@ -1120,10 +1156,58 @@ async function processUrl(url) {
 
     console.log(`   ✓ Created: ${outputPath}`);
 
+    // Check for rename mapping
+    let finalSlug = slug;
+    let finalPermalink = frontmatter.permalink;
+    let finalOutputPath = outputPath;
+    
+    // Use permalink for rename lookup (matches RENAMES key format)
+    const renameKey = frontmatter.permalink ? frontmatter.permalink.replace(/\/$/, '') : slug;
+    if (config.RENAMES && config.RENAMES[renameKey]) {
+        const renameMapping = config.RENAMES[renameKey];
+        const newFilename = renameMapping.filename;
+        const newPermalink = renameMapping.permalink;
+        
+        console.log(`   🔄 Renaming file and updating permalink...`);
+        console.log(`      Original: ${slug}.html -> ${newFilename}.html`);
+        console.log(`      Permalink: ${frontmatter.permalink} -> ${newPermalink}`);
+        
+        try {
+            const renameResult = await renameFileAndUpdatePermalink(
+                outputPath,
+                slug,
+                newFilename,
+                newPermalink,
+                frontmatter
+            );
+            
+            finalSlug = newFilename;
+            finalPermalink = newPermalink;
+            finalOutputPath = renameResult.newPath;
+            frontmatter = renameResult.updatedFrontmatter;
+            
+            console.log(`   ✓ Renamed to: ${finalOutputPath}`);
+        } catch (error) {
+            console.warn(`   ⚠ Rename failed, using original file: ${error.message}`);
+        }
+    }
+
     // Open URLs in Safari
     console.log(`   🌐 Opening URLs in Safari...`);
     await openInBrowser(url);
-    const localhostUrl = getLocalhostUrl(url);
+    
+    // Construct localhost URL using new permalink if renamed, otherwise use original pathname
+    let localhostUrl;
+    if (config.RENAMES && config.RENAMES[renameKey]) {
+        // Use the new permalink for localhost URL
+        // Ensure permalink has leading slash
+        const permalinkPath = finalPermalink.startsWith('/') ? finalPermalink : `/${finalPermalink}`;
+        localhostUrl = `http://localhost:8080${permalinkPath}`;
+    } else {
+        // Use original URL pathname
+        localhostUrl = getLocalhostUrl(url);
+    }
+    
     if (localhostUrl) {
         await openInBrowser(localhostUrl);
         console.log(`   ✓ Opened: ${url}`);

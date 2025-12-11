@@ -5,9 +5,23 @@ export default {
     // List of URLs to scrape
     
     URLS: [
-        "https://phxinjurylaw.com/gilbert-personal-injury-lawyer/",
-        "https://phxinjurylaw.com/gilbert-car-accident-lawyer/",
+        "https://phxinjurylaw.com/best-online-attorney-services-in-phoenix/",
     ],
+
+    // Rename mappings: maps original slug to { filename: newSlug, permalink: newPermalink }
+    // Original slug is used to identify the file
+    // filename is used for the new file name
+    // permalink is used to update the permalink field in frontmatter
+    RENAMES: {
+        "tempe-personal-injury-lawyer": {
+            filename: "tempe",
+            permalink: "tempe/"
+        },
+        "tempe-car-accident-lawyer": {
+            filename: "car-accident-lawyer",
+            permalink: "tempe/car-accident-lawyer/"
+        },
+    },
 
     // Output directories (relative to project root)
     OUTPUT: {
@@ -18,7 +32,7 @@ export default {
     // Image settings
     IMAGE_EXTRACTION: {
         // Path prefix for rewritten image URLs in markdown
-        relativePath: "/assets/images/areas/",
+        relativePath: "/assets/images/calculator/",
         // Filename pattern: {slug} and {index} are replaced
         filenamePattern: "{slug}-{index}",
         // Optional: filter function to skip certain URLs (return false to skip)
