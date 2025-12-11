@@ -5,11 +5,8 @@ export default {
     // List of URLs to scrape
     
     URLS: [
-        "https://phxinjurylaw.com/practice-areas/car-accident-attorneys/",
-        "https://phxinjurylaw.com/practice-areas/whiplash-lawyer-arizona/",
-        "https://phxinjurylaw.com/practice-areas/personal-injury-lawyers-in-arizona/",
-        "https://phxinjurylaw.com/practice-areas/arizona-dui-attorney/",
-        "https://phxinjurylaw.com/practice-areas/arizona-wrongful-death-attorney/",
+        "https://phxinjurylaw.com/gilbert-personal-injury-lawyer/",
+        "https://phxinjurylaw.com/gilbert-car-accident-lawyer/",
     ],
 
     // Output directories (relative to project root)
@@ -21,7 +18,7 @@ export default {
     // Image settings
     IMAGE_EXTRACTION: {
         // Path prefix for rewritten image URLs in markdown
-        relativePath: "/assets/images/practice-areas/",
+        relativePath: "/assets/images/areas/",
         // Filename pattern: {slug} and {index} are replaced
         filenamePattern: "{slug}-{index}",
         // Optional: filter function to skip certain URLs (return false to skip)

@@ -3,6 +3,10 @@ import { JSDOM } from "jsdom";
 import fs from "fs/promises";
 import path from "path";
 import TurndownService from "turndown";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // ============================================
 // UTILITIES
@@ -22,6 +26,81 @@ function getSlugFromUrl(url) {
  */
 async function ensureDir(dirPath) {
     await fs.mkdir(dirPath, { recursive: true });
+}
+
+/**
+ * Get unique filename by appending -2, -3, etc. if file already exists
+ */
+async function getUniqueFilename(dirPath, baseFilename) {
+    let filename = baseFilename;
+    let counter = 1;
+    const fullPath = path.join(dirPath, filename);
+    
+    try {
+        await fs.access(fullPath);
+        // File exists, need to make it unique
+        const ext = path.extname(baseFilename);
+        const nameWithoutExt = path.basename(baseFilename, ext);
+        
+        do {
+            counter++;
+            filename = `${nameWithoutExt}-${counter}${ext}`;
+            const testPath = path.join(dirPath, filename);
+            try {
+                await fs.access(testPath);
+                // This one also exists, try next
+            } catch {
+                // This filename is available
+                break;
+            }
+        } while (true);
+    } catch {
+        // File doesn't exist, use original filename
+    }
+    
+    return filename;
+}
+
+/**
+ * Open URL in Safari browser
+ */
+async function openInBrowser(url) {
+    try {
+        const platform = process.platform;
+        let command;
+
+        if (platform === 'darwin') {
+            // macOS - use Safari
+            command = `open -a "Safari" "${url}"`;
+        } else if (platform === 'linux') {
+            // Linux - fallback to default browser
+            command = `xdg-open "${url}"`;
+        } else if (platform === 'win32') {
+            // Windows - fallback to default browser
+            command = `start "" "${url}"`;
+        } else {
+            console.warn(`  ⚠ Unsupported platform for opening browser: ${platform}`);
+            return;
+        }
+
+        await execAsync(command);
+    } catch (error) {
+        console.warn(`  ⚠ Failed to open Safari: ${error.message}`);
+    }
+}
+
+/**
+ * Construct localhost URL from original URL
+ */
+function getLocalhostUrl(originalUrl) {
+    try {
+        const urlObj = new URL(originalUrl);
+        const pathname = urlObj.pathname;
+        return `http://localhost:8080${pathname}`;
+    } catch (error) {
+        console.warn(`  ⚠ Failed to construct localhost URL: ${error.message}`);
+        return null;
+    }
 }
 
 /**
@@ -566,14 +645,12 @@ function sanitizeHtml(html) {
             }
         }
 
-        // Unwrap images from div tags (div containing only an img)
+        // Unwrap ALL div tags (replace div with its contents)
         const divs = document.querySelectorAll('div');
         for (const div of divs) {
-            const img = div.querySelector('img');
-            if (img && div.children.length === 1 && div.textContent.trim() === '') {
-                div.replaceWith(img);
-                changed = true;
-            }
+            // Replace div with its child nodes (unwrap it)
+            div.replaceWith(...div.childNodes);
+            changed = true;
         }
     }
 
@@ -1010,7 +1087,7 @@ async function processUrl(url) {
             .split('\n')
             .map(line => line ? '            ' + line : line)
             .join('\n');
-        wrappedContent = `<div class="cs-content">\n${indentedContent}\n        </div>\n${scripts}`;
+        wrappedContent = `<div class="cs-content">\n${indentedContent}\n</div>\n${scripts}`;
     } else {
         wrappedContent = processedContent;
     }
@@ -1026,8 +1103,14 @@ async function processUrl(url) {
 
     // Generate and write output file
     const finalContent = generateMarkdown(frontmatter, finalBodyContent);
-    const outputPath = path.join(config.OUTPUT.CONTENT_DIR, `${slug}.html`);
+    const baseFilename = `${slug}.html`;
+    const uniqueFilename = await getUniqueFilename(config.OUTPUT.CONTENT_DIR, baseFilename);
+    const outputPath = path.join(config.OUTPUT.CONTENT_DIR, uniqueFilename);
     await fs.writeFile(outputPath, finalContent, 'utf-8');
+
+    if (uniqueFilename !== baseFilename) {
+        console.log(`   ℹ File already exists, using: ${uniqueFilename}`);
+    }
 
     // Count images that weren't downloaded (still have remote URLs)
     const remoteImageCount = countRemoteImages(processedContent, isHtml);
@@ -1036,6 +1119,16 @@ async function processUrl(url) {
     }
 
     console.log(`   ✓ Created: ${outputPath}`);
+
+    // Open URLs in Safari
+    console.log(`   🌐 Opening URLs in Safari...`);
+    await openInBrowser(url);
+    const localhostUrl = getLocalhostUrl(url);
+    if (localhostUrl) {
+        await openInBrowser(localhostUrl);
+        console.log(`   ✓ Opened: ${url}`);
+        console.log(`   ✓ Opened: ${localhostUrl}`);
+    }
 
     return { slug, frontmatter, downloadedCount, remoteImageCount, nullFields };
 }
