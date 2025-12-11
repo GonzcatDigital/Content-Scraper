@@ -3,8 +3,13 @@ export default {
     BASE_URL: "https://phxinjurylaw.com",
 
     // List of URLs to scrape
+    
     URLS: [
         "https://phxinjurylaw.com/practice-areas/car-accident-attorneys/",
+        "https://phxinjurylaw.com/practice-areas/whiplash-lawyer-arizona/",
+        "https://phxinjurylaw.com/practice-areas/personal-injury-lawyers-in-arizona/",
+        "https://phxinjurylaw.com/practice-areas/arizona-dui-attorney/",
+        "https://phxinjurylaw.com/practice-areas/arizona-wrongful-death-attorney/",
     ],
 
     // Output directories (relative to project root)

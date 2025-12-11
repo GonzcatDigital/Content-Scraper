@@ -26,20 +26,22 @@ async function ensureDir(dirPath) {
 
 /**
  * Download a file from URL and save to disk
+ * Returns { success: boolean, contentType?: string }
  */
 async function downloadFile(url, outputPath) {
     try {
         const response = await fetch(url);
         if (!response.ok) {
             console.warn(`  ⚠ Failed to download: ${url} (${response.status})`);
-            return false;
+            return { success: false };
         }
+        const contentType = response.headers.get('content-type') || null;
         const buffer = await response.arrayBuffer();
         await fs.writeFile(outputPath, Buffer.from(buffer));
-        return true;
+        return { success: true, contentType };
     } catch (error) {
         console.warn(`  ⚠ Error downloading ${url}: ${error.message}`);
-        return false;
+        return { success: false };
     }
 }
 
@@ -59,6 +61,35 @@ function getExtensionFromUrl(url) {
 }
 
 /**
+ * Get file extension from MIME type
+ * Maps common image MIME types to file extensions
+ */
+function getExtensionFromMimeType(mimeType) {
+    if (!mimeType || typeof mimeType !== 'string') {
+        return null;
+    }
+
+    // Normalize MIME type (remove parameters like charset)
+    const normalizedMime = mimeType.split(';')[0].trim().toLowerCase();
+
+    const mimeToExt = {
+        'image/webp': '.webp',
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/png': '.png',
+        'image/gif': '.gif',
+        'image/svg+xml': '.svg',
+        'image/svg': '.svg',
+        'image/avif': '.avif',
+        'image/bmp': '.bmp',
+        'image/x-icon': '.ico',
+        'image/vnd.microsoft.icon': '.ico',
+    };
+
+    return mimeToExt[normalizedMime] || null;
+}
+
+/**
  * Generate image filename based on pattern
  */
 function generateImageFilename(pattern, slug, index, extension) {
@@ -69,48 +100,208 @@ function generateImageFilename(pattern, slug, index, extension) {
 }
 
 /**
- * Extract the last URL from a srcset attribute
+ * Extract dimensions from URL (filename patterns, query params, path patterns)
+ * Returns { width, height } or null if not found
+ */
+function extractSizeFromUrl(url) {
+    if (!url) return null;
+
+    // Try filename patterns: image-700x246.jpg, image_700x246.jpg, image.700x246.jpg
+    const filenamePatterns = [
+        /[_-](\d+)x(\d+)[._-]/i,  // image-700x246.jpg or image_700x246.jpg
+        /\.(\d+)x(\d+)\./i,        // image.700x246.jpg
+        /[_-](\d+)x(\d+)$/i,       // image-700x246 (at end, before extension)
+    ];
+
+    for (const pattern of filenamePatterns) {
+        const match = url.match(pattern);
+        if (match) {
+            const width = parseInt(match[1], 10);
+            const height = parseInt(match[2], 10);
+            if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+                return { width, height };
+            }
+        }
+    }
+
+    // Try query parameters: ?w=700&h=246 or ?width=700&height=246
+    try {
+        const urlObj = new URL(url, 'http://dummy.com'); // base URL needed for relative URLs
+        const width = urlObj.searchParams.get('w') || urlObj.searchParams.get('width');
+        const height = urlObj.searchParams.get('h') || urlObj.searchParams.get('height');
+        if (width && height) {
+            const w = parseInt(width, 10);
+            const h = parseInt(height, 10);
+            if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+                return { width: w, height: h };
+            }
+        }
+    } catch (e) {
+        // URL parsing failed, continue
+    }
+
+    // Try path patterns: /700x246/ in path
+    const pathPattern = /\/(\d+)x(\d+)\//i;
+    const pathMatch = url.match(pathPattern);
+    if (pathMatch) {
+        const width = parseInt(pathMatch[1], 10);
+        const height = parseInt(pathMatch[2], 10);
+        if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+            return { width, height };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Extract the largest URL from a srcset attribute based on width descriptor
  * srcset format: "url1 300w, url2 600w, url3 1200w" or "url1, url2, url3"
  * Converts relative URLs to absolute using baseUrl
- * Returns the last URL in the list, or null if srcset is invalid/empty
+ * Returns the URL with the largest width value, or null if srcset is invalid/empty
+ * Falls back to extracting size from URLs if no width descriptors are found
  */
-function getLastUrlFromSrcset(srcset, baseUrl) {
+function getLargestUrlFromSrcset(srcset, baseUrl) {
     if (!srcset || typeof srcset !== 'string') {
         return null;
     }
+
+    // Debug: Log input
+    console.log(`  🔍 Parsing srcset: ${srcset.substring(0, 100)}${srcset.length > 100 ? '...' : ''}`);
 
     // Split by comma to get individual entries
     const entries = srcset.split(',').map(entry => entry.trim());
     
     if (entries.length === 0) {
+        console.log(`  ⚠ No entries found in srcset`);
         return null;
     }
 
-    // Get the last entry
-    const lastEntry = entries[entries.length - 1];
-    
-    // Extract URL (everything before the first space, or entire string if no space)
-    // This handles both "url 300w" and "url" formats
-    let url = lastEntry.split(/\s+/)[0].trim();
-    
-    // If URL is already absolute, return it
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-        return url;
-    }
-    
-    // If URL is relative and we have a baseUrl, convert to absolute
-    if (baseUrl && url) {
-        try {
-            // Use URL constructor to resolve relative URL against baseUrl
-            const absoluteUrl = new URL(url, baseUrl).href;
-            return absoluteUrl;
-        } catch (error) {
-            // If URL construction fails, return null
-            return null;
+    let largestEntry = null;
+    let maxWidth = -1;
+    let extractionMethod = 'none';
+    const entryDetails = [];
+
+    // Parse all entries to find the one with the largest width
+    for (const entry of entries) {
+        // Split entry into URL and descriptor parts
+        const parts = entry.split(/\s+/);
+        const url = parts[0].trim();
+        
+        if (!url) continue;
+
+        let width = -1;
+        let method = 'none';
+
+        // Method 1: Look for width descriptor (e.g., "300w", "512w")
+        for (let i = 1; i < parts.length; i++) {
+            const descriptor = parts[i].trim();
+            // Check if descriptor ends with 'w' (width descriptor)
+            if (descriptor.endsWith('w')) {
+                const widthValue = parseInt(descriptor.slice(0, -1), 10);
+                if (!isNaN(widthValue) && widthValue > 0) {
+                    width = widthValue;
+                    method = 'width-descriptor';
+                    break;
+                }
+            }
+        }
+
+        // Method 2: If no width descriptor, try extracting from URL
+        if (width === -1) {
+            const sizeInfo = extractSizeFromUrl(url);
+            if (sizeInfo) {
+                width = sizeInfo.width;
+                method = 'url-extraction';
+            }
+        }
+
+        entryDetails.push({ url, width, method });
+
+        // If this entry has a larger width, update our candidate
+        if (width > maxWidth) {
+            maxWidth = width;
+            largestEntry = url;
+            extractionMethod = method;
         }
     }
+
+    // Debug: Log what we found
+    console.log(`  📊 Found ${entries.length} entries:`);
+    entryDetails.forEach((detail, idx) => {
+        const widthStr = detail.width > 0 ? `${detail.width}px (${detail.method})` : 'no size';
+        console.log(`    ${idx + 1}. ${detail.url.substring(0, 60)}${detail.url.length > 60 ? '...' : ''} - ${widthStr}`);
+    });
+
+    // If no width information was found anywhere, fall back to last entry
+    if (maxWidth === -1) {
+        console.log(`  ⚠ No size information found, falling back to last entry`);
+        const lastEntry = entries[entries.length - 1];
+        largestEntry = lastEntry.split(/\s+/)[0].trim();
+        extractionMethod = 'fallback-last';
+    } else {
+        console.log(`  ✅ Selected largest: ${maxWidth}px (method: ${extractionMethod})`);
+    }
+
+    if (!largestEntry) {
+        console.log(`  ❌ No valid entry found`);
+        return null;
+    }
     
-    return null;
+    // Convert to absolute URL if needed
+    let finalUrl = largestEntry;
+    if (!largestEntry.startsWith('http://') && !largestEntry.startsWith('https://')) {
+        // If URL is relative and we have a baseUrl, convert to absolute
+        if (baseUrl) {
+            try {
+                // Use URL constructor to resolve relative URL against baseUrl
+                finalUrl = new URL(largestEntry, baseUrl).href;
+            } catch (error) {
+                // If URL construction fails, return null
+                console.log(`  ❌ Failed to convert relative URL: ${error.message}`);
+                return null;
+            }
+        }
+    }
+
+    console.log(`  🎯 Final URL: ${finalUrl.substring(0, 80)}${finalUrl.length > 80 ? '...' : ''}`);
+    return finalUrl;
+}
+
+/**
+ * Read template file and replace placeholders with actual content
+ * @param {string} title - Title to replace {{TITLE}} placeholder
+ * @param {string} content - Content to replace {{CONTENT}} placeholder
+ * @param {string} schemaScript - Schema script content to replace {{SCHEMA_SCRIPT}} placeholder
+ * @param {string} bannerAlt - Alt text to replace {{BANNER_ALT}} placeholder
+ * @returns {Promise<string>} Processed template content
+ */
+async function processTemplate(title, content, schemaScript = '', bannerAlt = '') {
+    try {
+        const templatePath = path.join(process.cwd(), 'src', 'template.html');
+        const templateContent = await fs.readFile(templatePath, 'utf-8');
+        
+        // Indent schema script content (4 spaces to match script tag indentation)
+        let indentedSchemaScript = '';
+        if (schemaScript) {
+            indentedSchemaScript = schemaScript
+                .split('\n')
+                .map(line => line ? '    ' + line : line)
+                .join('\n');
+        }
+        
+        // Replace placeholders
+        let processed = templateContent.replace(/\{\{TITLE\}\}/g, title || '');
+        processed = processed.replace(/\{\{CONTENT\}\}/g, content || '');
+        processed = processed.replace(/\{\{SCHEMA_SCRIPT\}\}/g, indentedSchemaScript);
+        processed = processed.replace(/\{\{BANNER_ALT\}\}/g, bannerAlt || '');
+        
+        return processed;
+    } catch (error) {
+        console.warn(`  ⚠ Error reading template file: ${error.message}`);
+        // Fallback: return content without template wrapper
+        return content;
+    }
 }
 
 // ============================================
@@ -253,20 +444,20 @@ function preprocessLazyImages(html) {
 
     const images = document.querySelectorAll('img');
     for (const img of images) {
-        // Priority 1: Check nitro-lazy-srcset first - extract last URL (typically largest)
+        // Priority 1: Check nitro-lazy-srcset first - extract largest URL
         const nitroSrcset = img.getAttribute('nitro-lazy-srcset');
         if (nitroSrcset) {
-            const srcsetUrl = getLastUrlFromSrcset(nitroSrcset, baseUrl);
+            const srcsetUrl = getLargestUrlFromSrcset(nitroSrcset, baseUrl);
             if (srcsetUrl) {
                 img.setAttribute('src', srcsetUrl);
                 continue; // Use nitro-lazy-srcset URL, skip other checks
             }
         }
 
-        // Priority 2: Check regular srcset - extract last URL
+        // Priority 2: Check regular srcset - extract largest URL
         const srcset = img.getAttribute('srcset');
         if (srcset) {
-            const srcsetUrl = getLastUrlFromSrcset(srcset, baseUrl);
+            const srcsetUrl = getLargestUrlFromSrcset(srcset, baseUrl);
             if (srcsetUrl) {
                 img.setAttribute('src', srcsetUrl);
                 continue; // Use srcset URL, skip other checks
@@ -349,18 +540,46 @@ function sanitizeHtml(html) {
         p.replaceWith(script);
     }
 
-    // Unwrap images from h2 tags (h2 containing only an img)
-    const h2s = document.querySelectorAll('h2');
-    for (const h2 of h2s) {
-        const img = h2.querySelector('img');
-        if (img && h2.children.length === 1 && h2.textContent.trim() === '') {
-            h2.replaceWith(img);
+    // Unwrap images from wrapper elements (h2, p, div)
+    // Process multiple passes to handle nested wrappers like <div><p><img></p></div>
+    let changed = true;
+    while (changed) {
+        changed = false;
+
+        // Unwrap images from h2 tags (h2 containing only an img)
+        const h2s = document.querySelectorAll('h2');
+        for (const h2 of h2s) {
+            const img = h2.querySelector('img');
+            if (img && h2.children.length === 1 && h2.textContent.trim() === '') {
+                h2.replaceWith(img);
+                changed = true;
+            }
+        }
+
+        // Unwrap images from p tags (p containing only an img)
+        const paragraphs = document.querySelectorAll('p');
+        for (const p of paragraphs) {
+            const img = p.querySelector('img');
+            if (img && p.children.length === 1 && p.textContent.trim() === '') {
+                p.replaceWith(img);
+                changed = true;
+            }
+        }
+
+        // Unwrap images from div tags (div containing only an img)
+        const divs = document.querySelectorAll('div');
+        for (const div of divs) {
+            const img = div.querySelector('img');
+            if (img && div.children.length === 1 && div.textContent.trim() === '') {
+                div.replaceWith(img);
+                changed = true;
+            }
         }
     }
 
     // Remove empty paragraphs (containing only whitespace or &nbsp;)
-    const paragraphs = document.querySelectorAll('p');
-    for (const p of paragraphs) {
+    const remainingParagraphs = document.querySelectorAll('p');
+    for (const p of remainingParagraphs) {
         const text = p.textContent.trim().replace(/\u00A0/g, ''); // \u00A0 is &nbsp;
         if (text === '' && p.querySelectorAll('img, a').length === 0) {
             p.remove();
@@ -474,20 +693,20 @@ function extractImagesFromHtml(html) {
         const alt = img.getAttribute('alt') || '';
         let url = '';
 
-        // Priority 1: Check nitro-lazy-srcset first - extract last URL (typically largest)
+        // Priority 1: Check nitro-lazy-srcset first - extract largest URL
         const nitroSrcset = img.getAttribute('nitro-lazy-srcset');
         if (nitroSrcset) {
-            const srcsetUrl = getLastUrlFromSrcset(nitroSrcset, baseUrl);
+            const srcsetUrl = getLargestUrlFromSrcset(nitroSrcset, baseUrl);
             if (srcsetUrl) {
                 url = srcsetUrl;
             }
         }
 
-        // Priority 2: Check regular srcset - extract last URL
+        // Priority 2: Check regular srcset - extract largest URL
         if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
             const srcset = img.getAttribute('srcset');
             if (srcset) {
-                const srcsetUrl = getLastUrlFromSrcset(srcset, baseUrl);
+                const srcsetUrl = getLargestUrlFromSrcset(srcset, baseUrl);
                 if (srcsetUrl) {
                     url = srcsetUrl;
                 }
@@ -524,6 +743,22 @@ function extractImagesFromHtml(html) {
 }
 
 /**
+ * Get Content-Type from URL via HEAD request
+ * Returns content type string or null
+ */
+async function getContentType(url) {
+    try {
+        const response = await fetch(url, { method: 'HEAD' });
+        if (response.ok) {
+            return response.headers.get('content-type');
+        }
+    } catch (error) {
+        // If HEAD fails, we'll fall back to URL extension
+    }
+    return null;
+}
+
+/**
  * Download images and rewrite URLs in content (markdown or HTML)
  * Returns { content, downloadedCount, failedCount, totalFound }
  */
@@ -535,14 +770,25 @@ async function downloadAndRewriteImages(content, slug, isHtml = false) {
     let index = 1;
 
     for (const { url, alt } of images) {
-        const extension = getExtensionFromUrl(url);
+        // Try to get Content-Type to determine correct extension
+        let extension = null;
+        const contentType = await getContentType(url);
+        if (contentType) {
+            extension = getExtensionFromMimeType(contentType);
+        }
+        
+        // Fall back to URL extension if Content-Type didn't give us one
+        if (!extension) {
+            extension = getExtensionFromUrl(url);
+        }
+
         const pattern = config.IMAGE_EXTRACTION.filenamePattern || "{slug}-{index}";
         const filename = generateImageFilename(pattern, slug, index, extension);
         const outputPath = path.join(config.OUTPUT.IMAGES_DIR, filename);
         const localPath = `${config.IMAGE_EXTRACTION.relativePath}${filename}`;
 
-        const success = await downloadFile(url, outputPath);
-        if (success) {
+        const downloadResult = await downloadFile(url, outputPath);
+        if (downloadResult.success) {
             // Rewrite URL in markdown
             result = result.replaceAll(url, localPath);
             downloadedCount++;
@@ -675,13 +921,24 @@ async function processUrl(url) {
 
         if (featuredImage?.url) {
             // Download featured image with its custom pattern
-            const extension = getExtensionFromUrl(featuredImage.url);
+            // Try to get Content-Type to determine correct extension
+            let extension = null;
+            const contentType = await getContentType(featuredImage.url);
+            if (contentType) {
+                extension = getExtensionFromMimeType(contentType);
+            }
+            
+            // Fall back to URL extension if Content-Type didn't give us one
+            if (!extension) {
+                extension = getExtensionFromUrl(featuredImage.url);
+            }
+
             const pattern = featuredConfig.filenamePattern || "{slug}-featured";
             const filename = pattern.replace('{slug}', slug) + extension;
             const outputPath = path.join(config.OUTPUT.IMAGES_DIR, filename);
 
-            const success = await downloadFile(featuredImage.url, outputPath);
-            if (success) {
+            const downloadResult = await downloadFile(featuredImage.url, outputPath);
+            if (downloadResult.success) {
                 frontmatter[frontmatterKey] = `${config.IMAGE_EXTRACTION.relativePath}${filename}`;
                 frontmatter[altFrontmatterKey] = featuredImage.alt || null;
                 console.log(`   ✓ Downloaded featured image: ${filename}`);
@@ -713,11 +970,29 @@ async function processUrl(url) {
 
     // Extract scripts to place after container div
     let scripts = '';
+    let schemaScript = '';
     let contentWithoutScripts = processedContent;
     if (isHtml) {
         const scriptRegex = /<script[\s\S]*?<\/script>/gi;
         const scriptMatches = processedContent.match(scriptRegex) || [];
-        scripts = scriptMatches.join('\n');
+        
+        // Separate schema scripts from other scripts
+        const otherScripts = [];
+        
+        for (const script of scriptMatches) {
+            // Check if this is a schema script (type="application/ld+json")
+            if (/type=["']application\/ld\+json["']/i.test(script)) {
+                // Extract the content inside the schema script tag
+                const contentMatch = script.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+                if (contentMatch && contentMatch[1]) {
+                    schemaScript = contentMatch[1].trim();
+                }
+            } else {
+                otherScripts.push(script);
+            }
+        }
+        
+        scripts = otherScripts.join('\n');
         // Replace specific image URL in scripts
         scripts = scripts.replace(
             /https:\/\/phxinjurylaw\.com\/wp-content\/uploads\/[^"]+/g,
@@ -730,18 +1005,27 @@ async function processUrl(url) {
     const h1Html = h1Text ? `<h1 class="cs-title">${h1Text}</h1>\n\n` : '';
     let wrappedContent;
     if (isHtml) {
-        // Indent all content by 4 spaces
+        // Indent all content by 12 spaces (3 levels: section > cs-container > cs-content > content)
         const indentedContent = (h1Html + contentWithoutScripts)
             .split('\n')
-            .map(line => line ? '    ' + line : line)
+            .map(line => line ? '            ' + line : line)
             .join('\n');
-        wrappedContent = `<div class="cs-content">\n${indentedContent}\n</div>\n${scripts}`;
+        wrappedContent = `<div class="cs-content">\n${indentedContent}\n        </div>\n${scripts}`;
     } else {
         wrappedContent = processedContent;
     }
 
+    // Get h1 text for banner (banner uses h1, not page title)
+    const pageTitle = h1Text || '';
+
+    // Process template with title, content, and schema script (only for HTML)
+    let finalBodyContent = wrappedContent;
+    if (isHtml) {
+        finalBodyContent = await processTemplate(pageTitle, wrappedContent, schemaScript, h1Text);
+    }
+
     // Generate and write output file
-    const finalContent = generateMarkdown(frontmatter, wrappedContent);
+    const finalContent = generateMarkdown(frontmatter, finalBodyContent);
     const outputPath = path.join(config.OUTPUT.CONTENT_DIR, `${slug}.html`);
     await fs.writeFile(outputPath, finalContent, 'utf-8');
 
