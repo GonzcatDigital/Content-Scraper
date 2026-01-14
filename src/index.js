@@ -59,6 +59,19 @@ function getExtensionFromUrl(url) {
 }
 
 /**
+ * Normalize image extension to .jpg (handles .jpg, .jpeg, .JPG, .JPEG, etc.)
+ */
+function normalizeImageExtension(extension) {
+    const ext = extension.toLowerCase();
+    // Convert any jpeg/jpg variant to .jpg
+    if (ext === '.jpg' || ext === '.jpeg') {
+        return '.jpg';
+    }
+    // For other image formats, keep as-is but lowercase
+    return ext;
+}
+
+/**
  * Generate image filename based on pattern
  */
 function generateImageFilename(pattern, slug, index, extension) {
@@ -176,6 +189,26 @@ function extractFeaturedImage(html) {
     return { url, alt };
 }
 
+/**
+ * Extract all data-image-url attributes from HTML
+ * Returns array of unique URLs
+ */
+function extractDataImageUrls(html) {
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+    const elements = document.querySelectorAll('[data-image-url]');
+    const urls = new Set();
+
+    for (const element of elements) {
+        const url = element.getAttribute('data-image-url');
+        if (url && url.trim()) {
+            urls.add(url.trim());
+        }
+    }
+
+    return Array.from(urls);
+}
+
 // ============================================
 // MARKDOWN PROCESSING
 // ============================================
@@ -287,6 +320,37 @@ function countRemoteImages(markdown) {
     return matches ? matches.length : 0;
 }
 
+/**
+ * Download data-image-url images to per-page folder with sequential naming
+ * Returns { downloadedCount, failedCount, totalFound, folderPath }
+ */
+async function downloadDataImageUrls(urls, slug, baseOutputDir) {
+    const folderPath = path.join(baseOutputDir, slug);
+    await ensureDir(folderPath);
+
+    let downloadedCount = 0;
+    let failedCount = 0;
+    let index = 1;
+
+    for (const url of urls) {
+        const extension = getExtensionFromUrl(url);
+        const normalizedExtension = normalizeImageExtension(extension);
+        const pattern = config.DATA_IMAGE_URL_MODE.filenamePattern || "{index}";
+        const filename = pattern.replace('{index}', String(index).padStart(2, '0')) + normalizedExtension;
+        const outputPath = path.join(folderPath, filename);
+
+        const success = await downloadFile(url, outputPath);
+        if (success) {
+            downloadedCount++;
+            index++;
+        } else {
+            failedCount++;
+        }
+    }
+
+    return { downloadedCount, failedCount, totalFound: urls.length, folderPath };
+}
+
 // ============================================
 // OUTPUT GENERATION
 // ============================================
@@ -349,102 +413,136 @@ async function processUrl(url) {
     // Fetch page content
     const html = await getPageContent(url);
 
-    // Extract data (frontmatter, content HTML, and null fields)
-    const { frontmatter, content, nullFields } = createPageDataObject(url, html);
-    const featuredImage = extractFeaturedImage(html);
+    // Check if data-image-url mode is enabled
+    const dataImageUrlMode = config.DATA_IMAGE_URL_MODE?.enabled === true;
 
-    // Create output directories
-    await ensureDir(config.OUTPUT.CONTENT_DIR);
-    await ensureDir(config.OUTPUT.IMAGES_DIR);
+    if (dataImageUrlMode) {
+        // Data-image-url extraction mode
+        const urls = extractDataImageUrls(html);
+        console.log(`   Found ${urls.length} data-image-url attributes`);
 
-    // Step 1: Convert HTML to Markdown (no URL rewriting yet)
-    const rawMarkdown = htmlToMarkdown(content);
+        if (urls.length === 0) {
+            console.warn(`   ⚠ No data-image-url attributes found on this page`);
+            return { slug, downloadedCount: 0, failedCount: 0, totalFound: 0, folderPath: null, success: true };
+        }
 
-    // Step 2: Find all remote images in markdown, download them, rewrite URLs
-    const { markdown: processedMarkdown, downloadedCount, totalFound } =
-        await downloadAndRewriteImages(rawMarkdown, slug);
+        const baseOutputDir = config.DATA_IMAGE_URL_MODE.baseOutputDir || "./downloads";
+        const { downloadedCount, failedCount, totalFound, folderPath } = 
+            await downloadDataImageUrls(urls, slug, baseOutputDir);
 
-    console.log(`   Found ${totalFound} images in content, downloaded ${downloadedCount}`);
+        console.log(`   ✓ Downloaded ${downloadedCount}/${totalFound} images to ${folderPath}`);
+        if (failedCount > 0) {
+            console.warn(`   ⚠ Failed to download ${failedCount} images`);
+        }
 
-    // Handle featured image (if enabled)
-    const featuredConfig = config.IMAGE_EXTRACTION.featuredImage;
-    let firstBodyImagePath = null;
+        return { slug, downloadedCount, failedCount, totalFound, folderPath, success: true };
+    } else {
+        // Original blog migrator mode
+        // Extract data (frontmatter, content HTML, and null fields)
+        const { frontmatter, content, nullFields } = createPageDataObject(url, html);
+        const featuredImage = extractFeaturedImage(html);
 
-    // Track the first downloaded image for fallback
-    const firstImageMatch = processedMarkdown.match(/!\[.*?\]\(([^)]+)\)/);
-    if (firstImageMatch && !firstImageMatch[1].startsWith('http')) {
-        firstBodyImagePath = firstImageMatch[1];
-    }
+        // Create output directories
+        await ensureDir(config.OUTPUT.CONTENT_DIR);
+        await ensureDir(config.OUTPUT.IMAGES_DIR);
 
-    if (featuredConfig) {
-        const frontmatterKey = featuredConfig.frontmatterKey || 'featuredImage';
-        const altFrontmatterKey = featuredConfig.altFrontmatterKey || 'featuredImageAlt';
+        // Step 1: Convert HTML to Markdown (no URL rewriting yet)
+        const rawMarkdown = htmlToMarkdown(content);
 
-        if (featuredImage?.url) {
-            // Download featured image with its custom pattern
-            const extension = getExtensionFromUrl(featuredImage.url);
-            const pattern = featuredConfig.filenamePattern || "{slug}-featured";
-            const filename = pattern.replace('{slug}', slug) + extension;
-            const outputPath = path.join(config.OUTPUT.IMAGES_DIR, filename);
+        // Step 2: Find all remote images in markdown, download them, rewrite URLs
+        const { markdown: processedMarkdown, downloadedCount, totalFound } =
+            await downloadAndRewriteImages(rawMarkdown, slug);
 
-            const success = await downloadFile(featuredImage.url, outputPath);
-            if (success) {
-                frontmatter[frontmatterKey] = `${config.IMAGE_EXTRACTION.relativePath}${filename}`;
-                frontmatter[altFrontmatterKey] = featuredImage.alt || null;
-                console.log(`   ✓ Downloaded featured image: ${filename}`);
+        console.log(`   Found ${totalFound} images in content, downloaded ${downloadedCount}`);
+
+        // Handle featured image (if enabled)
+        const featuredConfig = config.IMAGE_EXTRACTION.featuredImage;
+        let firstBodyImagePath = null;
+
+        // Track the first downloaded image for fallback
+        const firstImageMatch = processedMarkdown.match(/!\[.*?\]\(([^)]+)\)/);
+        if (firstImageMatch && !firstImageMatch[1].startsWith('http')) {
+            firstBodyImagePath = firstImageMatch[1];
+        }
+
+        if (featuredConfig) {
+            const frontmatterKey = featuredConfig.frontmatterKey || 'featuredImage';
+            const altFrontmatterKey = featuredConfig.altFrontmatterKey || 'featuredImageAlt';
+
+            if (featuredImage?.url) {
+                // Download featured image with its custom pattern
+                const extension = getExtensionFromUrl(featuredImage.url);
+                const pattern = featuredConfig.filenamePattern || "{slug}-featured";
+                const filename = pattern.replace('{slug}', slug) + extension;
+                const outputPath = path.join(config.OUTPUT.IMAGES_DIR, filename);
+
+                const success = await downloadFile(featuredImage.url, outputPath);
+                if (success) {
+                    frontmatter[frontmatterKey] = `${config.IMAGE_EXTRACTION.relativePath}${filename}`;
+                    frontmatter[altFrontmatterKey] = featuredImage.alt || null;
+                    console.log(`   ✓ Downloaded featured image: ${filename}`);
+                } else if (firstBodyImagePath) {
+                    // Fallback to first body image on download failure
+                    frontmatter[frontmatterKey] = firstBodyImagePath;
+                    frontmatter[altFrontmatterKey] = featuredImage.alt || null;
+                    console.log(`   ℹ Using first image as fallback for featured image`);
+                } else {
+                    frontmatter[frontmatterKey] = null;
+                    frontmatter[altFrontmatterKey] = null;
+                    nullFields.push(frontmatterKey);
+                }
             } else if (firstBodyImagePath) {
-                // Fallback to first body image on download failure
+                // No featured image found - fallback to first body image
                 frontmatter[frontmatterKey] = firstBodyImagePath;
-                frontmatter[altFrontmatterKey] = featuredImage.alt || null;
+                frontmatter[altFrontmatterKey] = featuredImage?.alt || null;
                 console.log(`   ℹ Using first image as fallback for featured image`);
             } else {
                 frontmatter[frontmatterKey] = null;
                 frontmatter[altFrontmatterKey] = null;
                 nullFields.push(frontmatterKey);
             }
-        } else if (firstBodyImagePath) {
-            // No featured image found - fallback to first body image
-            frontmatter[frontmatterKey] = firstBodyImagePath;
-            frontmatter[altFrontmatterKey] = featuredImage?.alt || null;
-            console.log(`   ℹ Using first image as fallback for featured image`);
-        } else {
-            frontmatter[frontmatterKey] = null;
-            frontmatter[altFrontmatterKey] = null;
-            nullFields.push(frontmatterKey);
         }
+
+        // Generate and write markdown file
+        const finalMarkdown = generateMarkdown(frontmatter, processedMarkdown);
+        const markdownPath = path.join(config.OUTPUT.CONTENT_DIR, `${slug}.md`);
+        await fs.writeFile(markdownPath, finalMarkdown, 'utf-8');
+
+        // Count images that weren't downloaded (still have remote URLs)
+        const remoteImageCount = countRemoteImages(finalMarkdown);
+        if (remoteImageCount > 0) {
+            console.warn(`   ⚠ ${remoteImageCount} images not downloaded (still remote URLs)`);
+        }
+
+        console.log(`   ✓ Created: ${markdownPath}`);
+
+        return { slug, frontmatter, downloadedCount, remoteImageCount, nullFields, success: true };
     }
-
-    // Generate and write markdown file
-    const finalMarkdown = generateMarkdown(frontmatter, processedMarkdown);
-    const markdownPath = path.join(config.OUTPUT.CONTENT_DIR, `${slug}.md`);
-    await fs.writeFile(markdownPath, finalMarkdown, 'utf-8');
-
-    // Count images that weren't downloaded (still have remote URLs)
-    const remoteImageCount = countRemoteImages(finalMarkdown);
-    if (remoteImageCount > 0) {
-        console.warn(`   ⚠ ${remoteImageCount} images not downloaded (still remote URLs)`);
-    }
-
-    console.log(`   ✓ Created: ${markdownPath}`);
-
-    return { slug, frontmatter, downloadedCount, remoteImageCount, nullFields };
 }
 
 /**
  * Main entry point
  */
 async function init() {
-    console.log('🚀 Blog Migrator');
-    console.log(`   Processing ${config.URLS.length} URLs`);
-    console.log(`   Content output: ${config.OUTPUT.CONTENT_DIR}`);
-    console.log(`   Images output: ${config.OUTPUT.IMAGES_DIR}`);
+    const dataImageUrlMode = config.DATA_IMAGE_URL_MODE?.enabled === true;
+
+    if (dataImageUrlMode) {
+        console.log('🚀 Data Image URL Extractor');
+        console.log(`   Processing ${config.URLS.length} URLs`);
+        console.log(`   Output directory: ${config.DATA_IMAGE_URL_MODE.baseOutputDir}`);
+    } else {
+        console.log('🚀 Blog Migrator');
+        console.log(`   Processing ${config.URLS.length} URLs`);
+        console.log(`   Content output: ${config.OUTPUT.CONTENT_DIR}`);
+        console.log(`   Images output: ${config.OUTPUT.IMAGES_DIR}`);
+    }
 
     const results = [];
 
     for (const url of config.URLS) {
         try {
             const result = await processUrl(url);
-            results.push({ url, ...result, success: true });
+            results.push({ url, ...result });
         } catch (error) {
             console.error(`\n❌ Error processing ${url}:`, error.message);
             results.push({ url, success: false, error: error.message });
@@ -456,21 +554,70 @@ async function init() {
     console.log('📊 SUMMARY');
     console.log('='.repeat(50));
 
-    const successful = results.filter(r => r.success);
-    const failed = results.filter(r => !r.success);
-    const withNulls = successful.filter(r => r.nullFields && r.nullFields.length > 0);
-    const withRemoteImages = successful.filter(r => r.remoteImageCount > 0);
-    const totalRemoteImages = withRemoteImages.reduce((sum, r) => sum + r.remoteImageCount, 0);
-    const totalDownloaded = successful.reduce((sum, r) => sum + (r.downloadedCount || 0), 0);
+    const successful = results.filter(r => r.success !== false);
+    const failed = results.filter(r => r.success === false);
 
-    // Quick overview
-    console.log(`✓ Successful: ${successful.length}`);
-    console.log(`✗ Failed: ${failed.length}`);
-    console.log(`📷 Total images downloaded: ${totalDownloaded}`);
-    console.log(`⚠ Pages with missing fields: ${withNulls.length}`);
-    console.log(`⚠ Pages with remote images: ${withRemoteImages.length} (${totalRemoteImages} images total)`);
+    if (dataImageUrlMode) {
+        // Data-image-url mode summary
+        const totalDownloaded = successful.reduce((sum, r) => sum + (r.downloadedCount || 0), 0);
+        const totalFailed = successful.reduce((sum, r) => sum + (r.failedCount || 0), 0);
+        const totalFound = successful.reduce((sum, r) => sum + (r.totalFound || 0), 0);
 
-    // Detailed breakdowns
+        console.log(`✓ Successful: ${successful.length}`);
+        console.log(`✗ Failed: ${failed.length}`);
+        console.log(`📷 Total images found: ${totalFound}`);
+        console.log(`📥 Total images downloaded: ${totalDownloaded}`);
+        if (totalFailed > 0) {
+            console.log(`⚠ Total images failed: ${totalFailed}`);
+        }
+
+        // Per-page breakdown
+        if (successful.length > 0) {
+            console.log('\n' + '-'.repeat(50));
+            console.log('📁 Per-page results:');
+            for (const r of successful) {
+                if (r.folderPath) {
+                    console.log(`  - ${r.slug}: ${r.downloadedCount}/${r.totalFound} images → ${r.folderPath}`);
+                    if (r.failedCount > 0) {
+                        console.log(`    ⚠ ${r.failedCount} failed downloads`);
+                    }
+                } else {
+                    console.log(`  - ${r.slug}: No images found`);
+                }
+            }
+        }
+    } else {
+        // Blog migrator mode summary
+        const withNulls = successful.filter(r => r.nullFields && r.nullFields.length > 0);
+        const withRemoteImages = successful.filter(r => r.remoteImageCount > 0);
+        const totalRemoteImages = withRemoteImages.reduce((sum, r) => sum + r.remoteImageCount, 0);
+        const totalDownloaded = successful.reduce((sum, r) => sum + (r.downloadedCount || 0), 0);
+
+        console.log(`✓ Successful: ${successful.length}`);
+        console.log(`✗ Failed: ${failed.length}`);
+        console.log(`📷 Total images downloaded: ${totalDownloaded}`);
+        console.log(`⚠ Pages with missing fields: ${withNulls.length}`);
+        console.log(`⚠ Pages with remote images: ${withRemoteImages.length} (${totalRemoteImages} images total)`);
+
+        // Detailed breakdowns
+        if (withNulls.length > 0) {
+            console.log('\n' + '-'.repeat(50));
+            console.log('⚠ Pages with null/missing data fields:');
+            for (const r of withNulls) {
+                console.log(`  - ${r.slug}: ${r.nullFields.join(', ')}`);
+            }
+        }
+
+        if (withRemoteImages.length > 0) {
+            console.log('\n' + '-'.repeat(50));
+            console.log('⚠ Pages with images not downloaded (still remote URLs):');
+            for (const r of withRemoteImages) {
+                console.log(`  - ${r.slug}: ${r.remoteImageCount} images`);
+            }
+        }
+    }
+
+    // Failed URLs (common to both modes)
     if (failed.length > 0) {
         console.log('\n' + '-'.repeat(50));
         console.log('❌ Failed URLs:');
@@ -479,23 +626,7 @@ async function init() {
         }
     }
 
-    if (withNulls.length > 0) {
-        console.log('\n' + '-'.repeat(50));
-        console.log('⚠ Pages with null/missing data fields:');
-        for (const r of withNulls) {
-            console.log(`  - ${r.slug}: ${r.nullFields.join(', ')}`);
-        }
-    }
-
-    if (withRemoteImages.length > 0) {
-        console.log('\n' + '-'.repeat(50));
-        console.log('⚠ Pages with images not downloaded (still remote URLs):');
-        for (const r of withRemoteImages) {
-            console.log(`  - ${r.slug}: ${r.remoteImageCount} images`);
-        }
-    }
-
-    console.log('\n✅ Migration complete!');
+    console.log('\n✅ Processing complete!');
 }
 
 init();

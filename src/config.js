@@ -1,11 +1,15 @@
 export default {
     // Base URL of the website you're scraping (informational only)
-    BASE_URL: "https://example.com",
+    BASE_URL: "https://www.aquaticartspoolnspa.com",
 
     // List of URLs to scrape
     URLS: [
-        "https://example.com/blog-post-1/",
-        "https://example.com/blog-post-2/",
+        "https://www.aquaticartspoolnspa.com/freeform-pools",
+        "https://www.aquaticartspoolnspa.com/geometric-pools",
+        "https://www.aquaticartspoolnspa.com/small-pools",
+        "https://www.aquaticartspoolnspa.com/natural-pools",
+        "https://www.aquaticartspoolnspa.com/swimming-pool-features",
+        "https://www.aquaticartspoolnspa.com/spas-hottubs",
     ],
 
     // Output directories (relative to project root)
@@ -77,5 +81,13 @@ export default {
             getValue: (el) => el.innerHTML,
             isContent: true,
         },
+    },
+
+    // Data-image-url extraction mode
+    // When enabled, extracts images from data-image-url attributes instead of blog migration
+    DATA_IMAGE_URL_MODE: {
+        enabled: true,
+        baseOutputDir: "./downloads",
+        filenamePattern: "{index}", // Sequential: 01, 02, 03...
     }
 }
