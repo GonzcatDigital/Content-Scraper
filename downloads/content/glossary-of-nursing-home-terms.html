@@ -1,0 +1,77 @@
+---
+title: "Glossary of Nursing Home Terms | Nursing Home Abuse Lawyer Phoenix"
+description: "Explore our comprehensive Glossary of Nursing Home Terms. Understand critical legal, medical, and care-related definitions to help families, residents, and advocates navigate nursing home cases and elder law."
+permalink: "glossary-of-nursing-home-terms/"
+---
+
+{% extends "layouts/base.html" %} {% block head %}
+<!--  -->
+<link rel="preload" as="image" href="{% getUrl "/assets/images/banner.jpg" | resize({ width: 576, height: 640 }) | avif %}"/>
+<!--  -->
+<link rel="stylesheet" href="/assets/css/interior.css" />
+<link rel="stylesheet" href="/assets/css/glossary-index.css" />
+{% endblock %} {% block body %}
+
+    <!-- ============================================ -->
+    <!--                    Banner                    -->
+    <!-- ============================================ -->
+
+    <div id="banner-2285">
+        <div class="cs-container">
+            <span class="cs-int-title">Glossary of Nursing Home Terms</span>
+            <div class="cs-breadcrumbs">
+                <a href="/" class="cs-link">Home</a>
+                <a href="/contact/" class="cs-link cs-active">Get Started</a>
+            </div>
+        </div>
+        <!--Background Image-->
+        <picture class="cs-background">
+            <!--Mobile Image-->
+            <source media="(max-width: 600px)" srcset="{% getUrl "/assets/images/banner.jpg" | resize({ width: 640, height: 792 }) | avif %}" type="image/avif">
+            <!--Tablet Image-->
+            <source media="(max-width: 1024px)" srcset="{% getUrl "/assets/images/banner.jpg" | resize({ width: 2048, height: 912 }) | avif %}" type="image/avif">
+            <!--Desktop Image-->
+            <source media="(min-width: 1024px)" srcset="{% getUrl "/assets/images/banner.jpg" | resize({ width: 2500, height: 625 }) | avif %}" type="image/avif">
+            <img src="{% getUrl "/assets/images/banner.jpg" | resize({ width: 2500, height: 625 }) | jpeg %}" alt="banner" width="1920" height="480" decoding="async">
+        </picture>
+    </div>
+
+    <!-- ============================================ -->
+    <!--              Glossary Index                  -->
+    <!-- ============================================ -->
+
+    <section id="glossary-index">
+        <div class="cs-container">
+            <div class="cs-content">
+
+                {% set defined_letters = ["0-9","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"] %}
+
+                {% for letter in defined_letters %}
+                    {% set hasEntries = false %}
+                    {% for entry in glossary %}
+                        {% if entry.letter == letter %}
+                            {% set hasEntries = true %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if hasEntries %}
+                        <div class="glossary-group">
+                            <h2 class="glossary-letter">{{ letter }}</h2>
+                            <ul class="glossary-list">
+                                {% for entry in glossary %}
+                                    {% if entry.letter == letter %}
+                                        <li><a href="/glossary/{{ entry.slug }}/">{{ entry.name }}</a></li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+
+            </div>
+        </div>
+        <!--Waves Graphic-->
+        <picture class="cs-background"></picture>
+    </section>
+
+{% endblock %}

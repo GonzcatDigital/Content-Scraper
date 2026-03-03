@@ -1,0 +1,65 @@
+/* -- Glossary Index -- */
+
+#glossary-index {
+    padding: clamp(3.75rem, 7.82vw, 6.25rem) 1rem;
+
+    .cs-container {
+        max-width: 80rem;
+        width: 100%;
+        margin: 0 auto;
+    }
+
+    .glossary-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .glossary-letter {
+        font-size: 1.125rem;
+        font-weight: 700;
+        padding: 0.5rem 1rem;
+        margin: 0 0 0.75rem;
+        background-color: #f5f0e6;
+        color: #1f345e;
+    }
+
+    .glossary-list {
+        list-style: none;
+        margin: 0 0 1rem;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem 2rem;
+
+        li {
+            padding: 0.25rem 0;
+        }
+
+        a {
+            color: #c8922a;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: color 0.2s;
+
+            &:hover {
+                color: #1f345e;
+                text-decoration: underline;
+            }
+        }
+    }
+}
+
+@media only screen and (max-width: 48rem) {
+    #glossary-index {
+        .glossary-list {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+}
+
+@media only screen and (max-width: 30rem) {
+    #glossary-index {
+        .glossary-list {
+            grid-template-columns: 1fr;
+        }
+    }
+}
