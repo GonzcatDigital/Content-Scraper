@@ -339,95 +339,24 @@ function generateMarkdown(frontmatter, content) {
 // ============================================
 
 /**
- * Process a single URL
+ * Process a single URL — returns a data object for the glossary entry
  */
 async function processUrl(url) {
     const slug = getSlugFromUrl(url);
     console.log(`\n📄 Processing: ${slug}`);
     console.log(`   URL: ${url}`);
 
-    // Fetch page content
     const html = await getPageContent(url);
-
-    // Extract data (frontmatter, content HTML, and null fields)
     const { frontmatter, content, nullFields } = createPageDataObject(url, html);
-    const featuredImage = extractFeaturedImage(html);
 
-    // Create output directories
-    await ensureDir(config.OUTPUT.CONTENT_DIR);
-    await ensureDir(config.OUTPUT.IMAGES_DIR);
+    console.log(`   ✓ Extracted: ${frontmatter.title || slug}`);
 
-    // Step 1: Convert HTML to Markdown (no URL rewriting yet)
-    const rawMarkdown = htmlToMarkdown(content);
-
-    // Step 2: Find all remote images in markdown, download them, rewrite URLs
-    const { markdown: processedMarkdown, downloadedCount, totalFound } =
-        await downloadAndRewriteImages(rawMarkdown, slug);
-
-    console.log(`   Found ${totalFound} images in content, downloaded ${downloadedCount}`);
-
-    // Handle featured image (if enabled)
-    const featuredConfig = config.IMAGE_EXTRACTION.featuredImage;
-    let firstBodyImagePath = null;
-
-    // Track the first downloaded image for fallback
-    const firstImageMatch = processedMarkdown.match(/!\[.*?\]\(([^)]+)\)/);
-    if (firstImageMatch && !firstImageMatch[1].startsWith('http')) {
-        firstBodyImagePath = firstImageMatch[1];
-    }
-
-    if (featuredConfig) {
-        const frontmatterKey = featuredConfig.frontmatterKey || 'featuredImage';
-        const altFrontmatterKey = featuredConfig.altFrontmatterKey || 'featuredImageAlt';
-
-        if (featuredImage?.url) {
-            // Download featured image with its custom pattern
-            const extension = getExtensionFromUrl(featuredImage.url);
-            const pattern = featuredConfig.filenamePattern || "{slug}-featured";
-            const filename = pattern.replace('{slug}', slug) + extension;
-            const outputPath = path.join(config.OUTPUT.IMAGES_DIR, filename);
-
-            const success = await downloadFile(featuredImage.url, outputPath);
-            if (success) {
-                frontmatter[frontmatterKey] = `${config.IMAGE_EXTRACTION.relativePath}${filename}`;
-                frontmatter[altFrontmatterKey] = featuredImage.alt || null;
-                console.log(`   ✓ Downloaded featured image: ${filename}`);
-            } else if (firstBodyImagePath) {
-                // Fallback to first body image on download failure
-                frontmatter[frontmatterKey] = firstBodyImagePath;
-                frontmatter[altFrontmatterKey] = featuredImage.alt || null;
-                console.log(`   ℹ Using first image as fallback for featured image`);
-            } else {
-                frontmatter[frontmatterKey] = null;
-                frontmatter[altFrontmatterKey] = null;
-                nullFields.push(frontmatterKey);
-            }
-        } else if (firstBodyImagePath) {
-            // No featured image found - fallback to first body image
-            frontmatter[frontmatterKey] = firstBodyImagePath;
-            frontmatter[altFrontmatterKey] = featuredImage?.alt || null;
-            console.log(`   ℹ Using first image as fallback for featured image`);
-        } else {
-            frontmatter[frontmatterKey] = null;
-            frontmatter[altFrontmatterKey] = null;
-            nullFields.push(frontmatterKey);
-        }
-    }
-
-    // Generate and write markdown file
-    const finalMarkdown = generateMarkdown(frontmatter, processedMarkdown);
-    const markdownPath = path.join(config.OUTPUT.CONTENT_DIR, `${slug}.md`);
-    await fs.writeFile(markdownPath, finalMarkdown, 'utf-8');
-
-    // Count images that weren't downloaded (still have remote URLs)
-    const remoteImageCount = countRemoteImages(finalMarkdown);
-    if (remoteImageCount > 0) {
-        console.warn(`   ⚠ ${remoteImageCount} images not downloaded (still remote URLs)`);
-    }
-
-    console.log(`   ✓ Created: ${markdownPath}`);
-
-    return { slug, frontmatter, downloadedCount, remoteImageCount, nullFields };
+    return {
+        slug,
+        ...frontmatter,
+        content,
+        nullFields,
+    };
 }
 
 /**
@@ -436,66 +365,38 @@ async function processUrl(url) {
 async function init() {
     console.log('🚀 Blog Migrator');
     console.log(`   Processing ${config.URLS.length} URLs`);
-    console.log(`   Content output: ${config.OUTPUT.CONTENT_DIR}`);
-    console.log(`   Images output: ${config.OUTPUT.IMAGES_DIR}`);
 
-    const results = [];
+    const entries = [];
+    const failed = [];
 
     for (const url of config.URLS) {
         try {
-            const result = await processUrl(url);
-            results.push({ url, ...result, success: true });
+            const { nullFields, ...entry } = await processUrl(url);
+            entries.push(entry);
+            if (nullFields.length > 0) {
+                console.warn(`   ⚠ Missing fields: ${nullFields.join(', ')}`);
+            }
         } catch (error) {
             console.error(`\n❌ Error processing ${url}:`, error.message);
-            results.push({ url, success: false, error: error.message });
+            failed.push({ url, error: error.message });
         }
     }
 
-    // Summary
+    await ensureDir(config.OUTPUT.CONTENT_DIR);
+    const outputPath = path.join(config.OUTPUT.CONTENT_DIR, 'glossary.json');
+    await fs.writeFile(outputPath, JSON.stringify(entries, null, 2), 'utf-8');
+
     console.log('\n' + '='.repeat(50));
     console.log('📊 SUMMARY');
     console.log('='.repeat(50));
-
-    const successful = results.filter(r => r.success);
-    const failed = results.filter(r => !r.success);
-    const withNulls = successful.filter(r => r.nullFields && r.nullFields.length > 0);
-    const withRemoteImages = successful.filter(r => r.remoteImageCount > 0);
-    const totalRemoteImages = withRemoteImages.reduce((sum, r) => sum + r.remoteImageCount, 0);
-    const totalDownloaded = successful.reduce((sum, r) => sum + (r.downloadedCount || 0), 0);
-
-    // Quick overview
-    console.log(`✓ Successful: ${successful.length}`);
+    console.log(`✓ Successful: ${entries.length}`);
     console.log(`✗ Failed: ${failed.length}`);
-    console.log(`📷 Total images downloaded: ${totalDownloaded}`);
-    console.log(`⚠ Pages with missing fields: ${withNulls.length}`);
-    console.log(`⚠ Pages with remote images: ${withRemoteImages.length} (${totalRemoteImages} images total)`);
-
-    // Detailed breakdowns
     if (failed.length > 0) {
-        console.log('\n' + '-'.repeat(50));
-        console.log('❌ Failed URLs:');
         for (const f of failed) {
             console.log(`  - ${f.url}: ${f.error}`);
         }
     }
-
-    if (withNulls.length > 0) {
-        console.log('\n' + '-'.repeat(50));
-        console.log('⚠ Pages with null/missing data fields:');
-        for (const r of withNulls) {
-            console.log(`  - ${r.slug}: ${r.nullFields.join(', ')}`);
-        }
-    }
-
-    if (withRemoteImages.length > 0) {
-        console.log('\n' + '-'.repeat(50));
-        console.log('⚠ Pages with images not downloaded (still remote URLs):');
-        for (const r of withRemoteImages) {
-            console.log(`  - ${r.slug}: ${r.remoteImageCount} images`);
-        }
-    }
-
-    console.log('\n✅ Migration complete!');
+    console.log(`\n✅ Written to ${outputPath}`);
 }
 
 init();
