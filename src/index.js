@@ -9,12 +9,29 @@ import TurndownService from "turndown";
 // ============================================
 
 /**
- * Extract slug from URL
+ * Extract slug from URL (last path segment)
  */
 function getSlugFromUrl(url) {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname.replace(/\/$/, ''); // Remove trailing slash
     return pathname.split('/').filter(Boolean).pop() || 'index';
+}
+
+/**
+ * Format date string (e.g. "Mar 17, 2026") to ISO 8601 (e.g. "2026-03-17T12:00:00.000Z")
+ */
+function formatDateToISO(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return dateStr;
+    try {
+        const d = new Date(dateStr.trim());
+        if (isNaN(d.getTime())) return dateStr;
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}T12:00:00.000Z`;
+    } catch {
+        return dateStr;
+    }
 }
 
 /**
@@ -306,9 +323,12 @@ function generateFrontmatter(data) {
 
         // Handle different value types
         if (typeof value === 'string') {
-            // Escape quotes and wrap in quotes if contains special chars
-            if (value.includes(':') || value.includes('#') || value.includes('\n') || value.includes('"')) {
-                yaml += `${key}: "${value.replace(/"/g, '\\"')}"\n`;
+            const escapeQuotes = (s) => s.replace(/"/g, '\\"');
+            const alwaysQuoteKeys = ['description', 'url'];
+            const shouldQuote = alwaysQuoteKeys.includes(key) ||
+                value.includes(':') || value.includes('#') || value.includes('\n') || value.includes('"');
+            if (shouldQuote) {
+                yaml += `${key}: "${escapeQuotes(value)}"\n`;
             } else {
                 yaml += `${key}: ${value}\n`;
             }
@@ -351,6 +371,12 @@ async function processUrl(url) {
 
     // Extract data (frontmatter, content HTML, and null fields)
     const { frontmatter, content, nullFields } = createPageDataObject(url, html);
+
+    // Add slug (path after /blog/) as url, formatted date
+    frontmatter.url = slug;
+    if (frontmatter.date) {
+        frontmatter.date = formatDateToISO(frontmatter.date);
+    }
     const featuredImage = extractFeaturedImage(html);
 
     // Create output directories
