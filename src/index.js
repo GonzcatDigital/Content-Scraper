@@ -8,6 +8,11 @@ import TurndownService from "turndown";
 // UTILITIES
 // ============================================
 
+// Some hosts (WordPress security plugins, Cloudflare) block Node's default user agent
+const FETCH_OPTIONS = {
+    headers: { "User-Agent": config.USER_AGENT || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" },
+};
+
 /**
  * Extract slug from URL
  */
@@ -29,7 +34,7 @@ async function ensureDir(dirPath) {
  */
 async function downloadFile(url, outputPath) {
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, FETCH_OPTIONS);
         if (!response.ok) {
             console.warn(`  ⚠ Failed to download: ${url} (${response.status})`);
             return false;
@@ -76,7 +81,8 @@ function generateImageFilename(pattern, slug, index, extension) {
  * Fetch page HTML content
  */
 async function getPageContent(url) {
-    const response = await fetch(url);
+    const response = await fetch(url, FETCH_OPTIONS);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const html = await response.text();
     return html;
 }
@@ -279,6 +285,22 @@ async function downloadAndRewriteImages(markdown, slug) {
 }
 
 /**
+ * Rewrite link targets in markdown using config.LINKS.rewrite(href, slug)
+ * Images are left alone (they're handled by downloadAndRewriteImages)
+ */
+function rewriteLinks(markdown, slug) {
+    const rewrite = config.LINKS?.rewrite;
+    if (!rewrite) return markdown;
+
+    return markdown.replace(/(?<!!)\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (match, text, href, title) => {
+        const newHref = rewrite(href, slug);
+        // Returning null/false unlinks: keep the anchor text only
+        if (!newHref) return text;
+        return `[${text}](${newHref}${title})`;
+    });
+}
+
+/**
  * Count remaining remote images in markdown (images that failed to download)
  */
 function countRemoteImages(markdown) {
@@ -305,13 +327,12 @@ function generateFrontmatter(data) {
         }
 
         // Handle different value types
-        if (typeof value === 'string') {
-            // Escape quotes and wrap in quotes if contains special chars
-            if (value.includes(':') || value.includes('#') || value.includes('\n') || value.includes('"')) {
-                yaml += `${key}: "${value.replace(/"/g, '\\"')}"\n`;
-            } else {
-                yaml += `${key}: ${value}\n`;
-            }
+        // Plain YYYY-MM-DD dates stay unquoted so YAML/Eleventy read them as real dates
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            yaml += `${key}: ${value}\n`;
+        } else if (typeof value === 'string') {
+            // JSON-quoted strings are valid YAML and safely handle quotes, colons, apostrophes, etc.
+            yaml += `${key}: ${JSON.stringify(value)}\n`;
         } else if (Array.isArray(value)) {
             yaml += `${key}:\n`;
             for (const item of value) {
@@ -358,7 +379,7 @@ async function processUrl(url) {
     await ensureDir(config.OUTPUT.IMAGES_DIR);
 
     // Step 1: Convert HTML to Markdown (no URL rewriting yet)
-    const rawMarkdown = htmlToMarkdown(content);
+    const rawMarkdown = rewriteLinks(htmlToMarkdown(content), slug);
 
     // Step 2: Find all remote images in markdown, download them, rewrite URLs
     const { markdown: processedMarkdown, downloadedCount, totalFound } =
@@ -431,17 +452,38 @@ async function processUrl(url) {
 }
 
 /**
+ * Build the URL list from config.URLS plus any <loc> entries in config.SITEMAP
+ * SITEMAP: { url: "https://site.com/post-sitemap.xml", filter: (url) => true }
+ */
+async function getUrls() {
+    const urls = [...(config.URLS || [])];
+
+    if (config.SITEMAP?.url) {
+        const xml = await getPageContent(config.SITEMAP.url);
+        const locs = [...xml.matchAll(/<loc>\s*(.*?)\s*<\/loc>/g)].map(m => m[1]);
+        const filter = config.SITEMAP.filter || (() => true);
+        for (const loc of locs) {
+            if (filter(loc) && !urls.includes(loc)) urls.push(loc);
+        }
+        console.log(`   Found ${locs.length} URLs in sitemap, using ${urls.length}`);
+    }
+
+    return urls;
+}
+
+/**
  * Main entry point
  */
 async function init() {
     console.log('🚀 Blog Migrator');
-    console.log(`   Processing ${config.URLS.length} URLs`);
+    const urls = await getUrls();
+    console.log(`   Processing ${urls.length} URLs`);
     console.log(`   Content output: ${config.OUTPUT.CONTENT_DIR}`);
     console.log(`   Images output: ${config.OUTPUT.IMAGES_DIR}`);
 
     const results = [];
 
-    for (const url of config.URLS) {
+    for (const url of urls) {
         try {
             const result = await processUrl(url);
             results.push({ url, ...result, success: true });
